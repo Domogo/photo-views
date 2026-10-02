@@ -11,6 +11,8 @@ struct SearchResult: Decodable {
     var selectedAsset: IndexedAsset?
     var resultCount: Int
     var candidateCount: Int
+    var lenses: [String]?
+    var formats: [String]?
     var cameras: [String]
     var coverage: SearchCoverage
     var modelVersion: String

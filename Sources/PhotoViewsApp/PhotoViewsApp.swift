@@ -5,8 +5,10 @@ import AppKit
     @StateObject private var model = WorkspaceModel()
     var body: some Scene {
         WindowGroup("Photo Views") {
-            WorkspaceView(model:model)
-                .frame(minWidth:780,minHeight:520)
+            GeometryReader { geometry in
+                WorkspaceView(model:model,availableHeight:geometry.size.height)
+            }
+            .frame(minWidth:780,minHeight:520)
         }
         .defaultSize(width:1180,height:760)
         .commands {

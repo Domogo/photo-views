@@ -30,6 +30,9 @@ import PhotoViewsCore
     @Published var searchError: String?
     @Published var resultCount = 0
     @Published var cameras: [String] = []
+    @Published var lenses: [String] = []
+    @Published var formats: [String] = []
+    @Published var queryPlan: QueryPlan?
     @Published var visualCoverage = SearchCoverage(total:0,embedded:0,failed:0)
     @Published var visualIndexing = false
     @Published var visualPaused = false
@@ -264,19 +267,32 @@ import PhotoViewsCore
         guard let id = recipe.referenceAssetID else { return nil }
         return try? catalog?.indexedAssets(limit:1,assetID:id).first
     }
-    var filterSummary: String {
+    var filterSummary: String { filterDescription(recipe.filters) }
+    func filterDescription(_ filters: ExactFilters) -> String {
         var parts: [String] = []
-        if let camera = recipe.filters.camera { parts.append(camera) }
-        if let folder = recipe.filters.folder, !folder.isEmpty { parts.append("Folder: "+folder) }
+        if let camera = filters.camera { parts.append(camera) }
+        if let folder = filters.folder, !folder.isEmpty { parts.append("Folder: "+folder) }
         let dates = DateFormatter(); dates.dateStyle = .medium
-        if let date = recipe.filters.fromDate { parts.append("From "+dates.string(from:date)) }
-        if let date = recipe.filters.toDate { parts.append("Through "+dates.string(from:date)) }
-        if let lens = recipe.filters.lens { parts.append(lens) }
-        if let iso = recipe.filters.minISO { parts.append("ISO ≥ "+iso.formatted()) }
-        if let iso = recipe.filters.maxISO { parts.append("ISO ≤ "+iso.formatted()) }
-        parts += recipe.filters.confirmedTags
-        if let format = recipe.filters.format { parts.append(format) }
+        if let date = filters.fromDate { parts.append("From "+dates.string(from:date)) }
+        if let date = filters.toDate { parts.append("Through "+dates.string(from:date)) }
+        if let lens = filters.lens { parts.append(lens) }
+        if let iso = filters.minISO { parts.append("ISO ≥ "+iso.formatted()) }
+        if let iso = filters.maxISO { parts.append("ISO ≤ "+iso.formatted()) }
+        for (name,low,high) in [("f-number",filters.minAperture,filters.maxAperture),("Shutter seconds",filters.minShutterSeconds,filters.maxShutterSeconds),("Width",filters.minWidth,filters.maxWidth),("Height",filters.minHeight,filters.maxHeight)] {
+            if let low { parts.append(name+" ≥ "+low.formatted()) }; if let high { parts.append(name+" ≤ "+high.formatted()) }
+        }
+        parts += filters.confirmedTags
+        if let format = filters.format { parts.append(format) }
         return parts.joined(separator:" · ")
+    }
+    func interpretQuery() { queryPlan = QueryInterpreter.interpret(recipe.search,filters:recipe.filters,cameras:cameras,lenses:lenses,formats:formats) }
+    func applyQueryPlan() {
+        guard var plan = queryPlan else { return }
+        QueryInterpreter.validate(&plan)
+        guard plan.canApply else { queryPlan = plan; return }
+        recipe.search = plan.visualIntent; recipe.filters = plan.filters
+        if let group = plan.grouping { recipe.grouping = group }
+        searchMode = "visual"; queryPlan = nil
     }
     func clearFilters() { recipe.filters = ExactFilters() }
     func exitSimilar() { recipe.referenceAssetID = nil; recipe.search = "" }
@@ -313,7 +329,7 @@ import PhotoViewsCore
                     self.tagVocabularyVersion = result.tagVersion
                     self.assets = result.assets.map { self.normalizeCache($0) }
                     self.refreshSelectedOrganization()
-                    self.resultCount = result.resultCount; self.cameras = result.cameras; self.visualCoverage = result.coverage
+                    self.resultCount = result.resultCount; self.cameras = result.cameras; self.lenses = result.lenses ?? []; self.formats = result.formats ?? []; self.visualCoverage = result.coverage
                     if let id = self.selectedAssetID {
                         if let selected = self.assets.first(where:{ $0.id == id }) { self.retainedSelection = selected }
                         else if id != requestedSelection { self.refreshAssets() } // Selection changed while this request was in flight.

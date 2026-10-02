@@ -16,6 +16,8 @@ struct WorkspaceView: View {
     @State private var viewName = ""
     @State private var filtersVisible = false
     @State private var indexingDetails = false
+    @State private var queryHelp = false
+    var availableHeight: CGFloat = 760
     @State private var confirmedTagDraft = ""
     private let timer = Timer.publish(every:15,on:.main,in:.common).autoconnect()
 
@@ -51,6 +53,8 @@ struct WorkspaceView: View {
                     .help("Show or hide details")
             }
         }
+        .onChange(of:model.recipe.search) { _,text in if model.queryPlan?.input != text { model.queryPlan = nil } }
+        .onChange(of:model.searchMode) { _,_ in model.queryPlan = nil }
         .onChange(of:model.recipe) { _,_ in model.persistRecipe() }
         .onReceive(timer) { _ in if NSApp.isActive { model.refreshAccess() } }
         .alert("Photo Views",isPresented:Binding(get:{ model.errorMessage != nil },set:{ if !$0 { model.errorMessage = nil } })) {
@@ -172,6 +176,7 @@ struct WorkspaceView: View {
                     Divider()
                     Button("Refresh Results") { model.refreshAssets() }
                 }.help("Group, sort or save this view")
+                if model.searchMode == "visual" && !model.recipe.search.isEmpty { Button("Interpret") { filtersVisible = false; queryHelp = false; model.interpretQuery() }.accessibilityLabel("Interpret Query").help("Review supported query clauses as editable exact filters") }
                 Spacer(minLength:0)
                 if model.hasUnsavedChanges { Text("Unsaved changes").font(.caption).foregroundStyle(.secondary) }
                 if model.searching { ProgressView().controlSize(.small).accessibilityLabel("Searching photos") }
@@ -185,9 +190,29 @@ struct WorkspaceView: View {
                     Button("Use Current Search Model") { model.useCurrentSearchModel() }
                 }
             }
+            if let plan = model.queryPlan {
+                VStack(alignment:.leading,spacing:8) {
+                    HStack { Text("Review query").font(.headline); Spacer(); Button("Dismiss") { model.queryPlan = nil; queryHelp = false } }
+                    ScrollView {
+                        VStack(alignment:.leading,spacing:8) {
+                            TextField("Visual intent",text:Binding(get:{ model.queryPlan?.visualIntent ?? "" },set:{ model.queryPlan?.visualIntent = $0 })).textFieldStyle(.roundedBorder).accessibilityLabel("Interpreted visual intent")
+                            let summary = model.filterDescription(plan.filters)
+                            Text(summary.isEmpty ? "No exact constraints recognized" : summary).font(.caption).fixedSize(horizontal:false,vertical:true)
+                            if let grouping = plan.grouping { Text("Group by: \(grouping.title)").font(.caption) }
+                            ForEach(plan.ambiguities,id:\.self) { Text($0).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
+                            ForEach(plan.unsupported,id:\.self) { Text("Unsupported clause: "+$0).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
+                            Text("Only listed clauses become exact filters. Remaining words stay visual. Edit constraints in Filters after applying.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                        }
+                    }
+                    HStack { Button("Apply Plan") { model.applyQueryPlan(); queryHelp = false; filtersVisible = true }.disabled(!plan.canApply); Button("Syntax Help") { queryHelp.toggle() } }
+                }.padding(.top,8).frame(height:180)
+            }
+            if queryHelp {
+                ScrollView { Text("Examples: cars at night camera:\"NIKON Z f\" folder:Japan group by month; on:2025-11-06; iso>=400; aperture<=2.8; shutter<=1/500; width>=4000; tag:cars. Quote multiword values. today/yesterday use this Mac’s timezone. Strict >/< and arbitrary date phrases need manual filters.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }.frame(height:70)
+            }
             if filtersVisible {
                 Divider()
-                ScrollView { filterControls.frame(maxWidth:.infinity,alignment:.leading) }.frame(height:260)
+                ScrollView { filterControls.frame(maxWidth:.infinity,alignment:.leading) }.frame(height:max(100,min(260,availableHeight - 440)))
             }
             if model.hasFilters {
                 HStack(alignment:.top,spacing:8) {
@@ -224,6 +249,24 @@ struct WorkspaceView: View {
                     .textFieldStyle(.roundedBorder).accessibilityLabel("Confirmed tags, all required")
                 Button("Apply Tags") { applyConfirmedTags() }
                 Text("Every tag must be confirmed. Suggestions do not satisfy this filter.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+            }
+            DisclosureGroup("More metadata") {
+                VStack(alignment:.leading,spacing:12) {
+                    Picker("Lens",selection:Binding(get:{ model.recipe.filters.lens ?? "" },set:{ model.recipe.filters.lens = $0.isEmpty ? nil : $0 })) {
+                        Text("Any lens").tag("")
+                        ForEach(Array(Set(model.lenses + [model.recipe.filters.lens].compactMap { $0 })).sorted(),id:\.self) { Text($0).tag($0) }
+                    }
+                    Picker("Format",selection:Binding(get:{ model.recipe.filters.format ?? "" },set:{ model.recipe.filters.format = $0.isEmpty ? nil : $0 })) {
+                        Text("Any format").tag("")
+                        ForEach(Array(Set(model.formats + [model.recipe.filters.format].compactMap { $0 })).sorted(),id:\.self) { Text($0).tag($0) }
+                    }
+                    MetadataRange(title:"ISO",low:$model.recipe.filters.minISO,high:$model.recipe.filters.maxISO)
+                    MetadataRange(title:"Aperture (f-number)",low:$model.recipe.filters.minAperture,high:$model.recipe.filters.maxAperture)
+                    MetadataRange(title:"Shutter (seconds)",low:$model.recipe.filters.minShutterSeconds,high:$model.recipe.filters.maxShutterSeconds)
+                    MetadataRange(title:"Width (pixels)",low:$model.recipe.filters.minWidth,high:$model.recipe.filters.maxWidth)
+                    MetadataRange(title:"Height (pixels)",low:$model.recipe.filters.minHeight,high:$model.recipe.filters.maxHeight)
+                    Text("Limits are inclusive. Blank means any value. Photos with unknown metadata are excluded when that constraint is active. Width and height use original recorded dimensions.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                }.padding(.top,8)
             }
             Button("Clear All Filters") { confirmedTagDraft = ""; model.clearFilters() }.disabled(!model.hasFilters)
         }.padding(20).frame(width:320)
@@ -465,4 +508,20 @@ private struct PhotoTags: View {
         }.onChange(of:model.selectedAssetID) { _,_ in draft = ""; replacing = nil }
     }
     private func saveTag() { if model.addTag(draft,replacing:replacing) { draft = ""; replacing = nil } }
+}
+
+private struct MetadataRange: View {
+    var title: String
+    @Binding var low: Double?
+    @Binding var high: Double?
+    private var formatter: NumberFormatter { let f = NumberFormatter(); f.numberStyle = .decimal; f.maximumFractionDigits = 8; return f }
+    var body: some View {
+        VStack(alignment:.leading,spacing:6) {
+            Text(title).font(.subheadline)
+            HStack {
+                TextField("Minimum",value:$low,formatter:formatter).accessibilityLabel(title+" minimum")
+                TextField("Maximum",value:$high,formatter:formatter).accessibilityLabel(title+" maximum")
+            }.textFieldStyle(.roundedBorder)
+        }
+    }
 }

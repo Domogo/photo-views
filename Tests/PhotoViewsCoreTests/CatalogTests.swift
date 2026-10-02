@@ -8,6 +8,23 @@ final class CatalogTests {
         try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
     }
     func tearDownWithError() throws { try FileManager.default.removeItem(at:root) }
+    func testHumanApprovedQueryPlans() throws {
+        let now = Date(timeIntervalSince1970:1767227400), zone = TimeZone(identifier:"Europe/Zagreb")!
+        func parse(_ input: String) -> QueryPlan { QueryInterpreter.interpret(input,cameras:["NIKON Z f","NIKON Z 6"],lenses:[],formats:[],now:now,timezone:zone) }
+        let cars = parse("cars at night camera:\"NIKON Z f\" folder:Japan group by month")
+        try expectTrue(cars.canApply); try expectEqual(cars.visualIntent,"cars at night"); try expectEqual(cars.filters.camera,"NIKON Z f"); try expectEqual(cars.filters.folder,"Japan"); try expectEqual(cars.grouping,.month)
+        let water = parse("water iso<=200 shutter<=1/500")
+        try expectTrue(water.canApply); try expectEqual(water.visualIntent,"water"); try expectEqual(water.filters.maxISO,200); try expectEqual(water.filters.maxShutterSeconds,0.002)
+        let animals = parse("animals on:2025-11-06 tag:animals")
+        try expectTrue(animals.canApply); try expectEqual(animals.visualIntent,"animals"); try expectEqual(animals.filters.confirmedTags,["animals"]); try expectEqual(animals.filters.fromDate,animals.filters.toDate)
+        let fmt = DateFormatter(); fmt.timeZone = zone; fmt.dateFormat = "yyyy-MM-dd"
+        try expectEqual(fmt.string(from:animals.filters.fromDate!),"2025-11-06")
+        let people = parse("people yesterday"); var cal = Calendar(identifier:.gregorian); cal.timeZone = zone
+        try expectTrue(people.canApply); try expectEqual(people.visualIntent,"people"); try expectEqual(people.filters.fromDate,cal.date(byAdding:.day,value:-1,to:cal.startOfDay(for:now))); try expectEqual(people.filters.fromDate,people.filters.toDate)
+        let ambiguous = parse("camera:Nikon"); try expectTrue(!ambiguous.canApply && !ambiguous.ambiguities.isEmpty)
+        let unsupported = parse("cars location:Paris"); try expectTrue(!unsupported.canApply); try expectEqual(unsupported.unsupported,["location:Paris"])
+        print("PASS: all 6 user-approved interpretation examples match expected fields/grouping/refusal behavior (100% on this small acceptance set, not a representative held-out benchmark).")
+    }
     func testQueryInterpretation() throws {
         let now = Date(timeIntervalSince1970:1767227400) // 2026-01-01 00:30 UTC
         func parse(_ input: String, zone: String = "UTC") -> QueryPlan { QueryInterpreter.interpret(input,cameras:["NIKON Z f","NIKON Z 6","Sony A7"],lenses:["NIKKOR Z 28mm f/2.8"],formats:["JPG","NEF"],now:now,timezone:TimeZone(identifier:zone)!) }
@@ -23,6 +40,7 @@ final class CatalogTests {
         try expectTrue(!parse("camera:Sony camera:Nikon").canApply)
         try expectTrue(!parse("group by nested").canApply); try expectTrue(!parse("format:RAW").canApply)
         try expectTrue(!parse("location:Paris").canApply); try expectTrue(!parse("last month").canApply)
+        try expectTrue(!parse("iso<=100 iso<=200").canApply); try expectTrue(!parse("iso=100 iso<=200").canApply)
         try expectTrue(!parse("iso>=oops").canApply); try expectTrue(!parse("on:2025-12-01 yesterday").canApply)
         try expectTrue(!parse("iso>400").canApply); try expectTrue(!parse("iso>=800 iso<=400").canApply)
         try expectTrue(!parse("shutter<=1/0").canApply); try expectTrue(!parse("on:2025-02-29").canApply)
@@ -33,7 +51,7 @@ final class CatalogTests {
         try expectTrue(utc.filters.fromDate != la.filters.fromDate)
         try expectEqual(parse("dogs outdoors").visualIntent,"dogs outdoors")
         try expectEqual(try JSONDecoder().decode(QueryPlan.self,from:JSONEncoder().encode(plan)),plan)
-        print("PASS: 22 agent-authored query cases; supported constraints/grouping, ambiguity/unsupported refusal, calendar/leap dates, timezone boundary and typed plan round-trip. Human plan agreement remains unmeasured.")
+        print("PASS: 24 agent-authored query cases; supported constraints/grouping, ambiguity/unsupported refusal, calendar/leap dates, timezone boundary and typed plan round-trip. Representative held-out agreement remains unmeasured.")
     }
     func testSourceIdentityAndBookmarkSurviveReopening() throws {
         let folder = root.appendingPathComponent("Photos")
@@ -176,7 +194,7 @@ enum CheckFailure: Error { case failed(String) }
 @main struct CatalogChecks {
     static func main() throws {
         let suite = CatalogTests()
-        for check in [suite.testQueryInterpretation, suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testOrganizationPersistenceAndExplicitDecisions, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
+        for check in [suite.testHumanApprovedQueryPlans, suite.testQueryInterpretation, suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testOrganizationPersistenceAndExplicitDecisions, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
             try suite.setUpWithError()
             do { try check(); try suite.tearDownWithError() }
             catch { try? suite.tearDownWithError(); throw error }

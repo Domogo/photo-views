@@ -71,6 +71,7 @@ public enum QueryInterpreter {
             guard value.isFinite && value > 0 else { plan.ambiguities.append("\(v[0]): enter a positive finite limit."); return }
             guard v[1] != ">" && v[1] != "<" else { plan.unsupported.append("Strict \(v[1]) for \(v[0]); use >= or <=."); return }
             let min = v[1] != "<=", max = v[1] != ">="
+            if min { unique(v[0].lowercased()+" minimum") }; if max { unique(v[0].lowercased()+" maximum") }
             switch v[0].lowercased() {
             case "iso": if min { plan.filters.minISO = value }; if max { plan.filters.maxISO = value }
             case "aperture": if min { plan.filters.minAperture = value }; if max { plan.filters.maxAperture = value }
