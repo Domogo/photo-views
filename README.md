@@ -6,7 +6,7 @@ Describe what you remember. Filter what you know. Group the results however you 
 
 ## Project state
 
-M0 probes demonstrate native preview generation and local retrieval on this Mac; acceptance limitations are tracked in [M0_STATUS.md](M0_STATUS.md). M2 adds resumable metadata and preview indexing, a real-photo grid, keyboard selection, and cached previews. Local visual search comes next in M3.
+M0 probes demonstrate native preview generation and local retrieval on this Mac; acceptance limitations are tracked in [M0_STATUS.md](M0_STATUS.md). M3 connects resumable indexing and real-photo browsing to local visual/filename search, exact camera/date/folder filters, and Find Similar.
 Target development/demo machine: Apple Silicon MacBook Pro (M5 Max, 48 GB).
 Broad RAW support is the goal; support claims require camera/variant fixtures, not extension lists.
 
@@ -35,4 +35,20 @@ Use `--release` for an optimized build. The script creates an ad-hoc signed deve
 
 The catalog is stored in `~/Library/Application Support/Photo Views/catalog.sqlite`. `PHOTO_VIEWS_DATA_DIR` overrides its directory for isolated local checks. Previews are stored in `~/Library/Caches/PhotoViews/previews` with a 2 GiB disk budget; an isolated data-directory override also isolates its preview cache. Sources stay in their existing folders. App builds, catalogs, photos, previews, model weights, and probe output are excluded from Git.
 
-[M1 status](M1_STATUS.md) and [M2 status](M2_STATUS.md) record implemented behavior and validation. [Prism learnings](REFERENCE_LEARNINGS.md) connects reference observations to upcoming milestones.
+[M1 status](M1_STATUS.md), [M2 status](M2_STATUS.md), and [M3 status](M3_STATUS.md) record implemented behavior and validation. [Prism learnings](REFERENCE_LEARNINGS.md) connects reference observations to upcoming milestones.
+
+## Search on this Mac
+
+Type a description such as “cars at night” in the **Visual** search field. Switch its mode to **Filename** for filenames, folder paths or imported keywords. **Filters** expands camera, folder and inclusive capture-date constraints; the applied constraints remain visible after closing it. **View** contains grouping, sorting and saved-view actions. Select a photo and choose **Find Similar**; **Exit Similar** returns to browsing while retaining filters.
+
+The coverage disclosure shows which photos have visual embeddings and exposes separate preview/visual indexing controls. Visual searches return up to 100 nearest candidates, not guaranteed matches or confidence percentages. Exact filters are never broadened. Filename search also works for indexed photos without visual embeddings.
+
+This remains a local developer build, not a self-contained distributable. It reuses the externally stored M0 environment and pinned model under `~/Library/Caches/PhotoViews/m0/{venv,model}`. `PHOTO_VIEWS_PYTHON` and `PHOTO_VIEWS_MODEL` override those locations. Reproduce the environment with [M0 setup](spikes/m0/README.md); inference uses only local files with offline flags and never downloads from the app. The app bundles the versioned JSON-line worker script, while Python/packages/weights remain outside Git. Worker diagnostics stay beside the local catalog.
+
+Run retrieval invariants using the configured Python environment:
+
+```sh
+"$PHOTO_VIEWS_PYTHON" scripts/search/checks.py
+```
+
+The local default on this development Mac is `~/Library/Caches/PhotoViews/m0/venv/bin/python`. Real-fixture probe arguments and the evidence/limitations are recorded in [M3 status](M3_STATUS.md).

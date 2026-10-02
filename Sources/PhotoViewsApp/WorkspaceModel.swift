@@ -19,6 +19,18 @@ import PhotoViewsCore
     @Published var pausing = false
     @Published private var retainedSelection: IndexedAsset?
     @Published var assetLimit = 500
+    var searchMode: String { get { recipe.searchMode ?? "visual" } set { recipe.searchMode = newValue } }
+    @Published var searching = false
+    @Published var searchError: String?
+    @Published var resultCount = 0
+    @Published var cameras: [String] = []
+    @Published var visualCoverage = SearchCoverage(total:0,embedded:0,failed:0)
+    @Published var visualIndexing = false
+    @Published var visualPaused = false
+    private var searchGeneration = 0
+    private var lastVisualRefresh = Date.distantPast
+    private var searchTask: Task<Void,Never>?
+    private lazy var searchBridge = SearchBridge(catalogURL:catalogURL)
     private let indexer = IndexCoordinator()
     private var queuedSources: [CatalogSource] = []
     let cacheURL: URL
@@ -43,6 +55,8 @@ import PhotoViewsCore
             isReady = true
             refreshAccess()
             refreshAssets()
+            visualPaused = UserDefaults.standard.bool(forKey:"visualIndexingPaused")
+            if !visualPaused { startVisualIndexing() }
             let interrupted = sources.filter { source in indexProgress.contains { $0.sourceID == source.id && ["discovering","indexing"].contains($0.state) } }
             if !interrupted.isEmpty { startIndexing(interrupted) }
         } catch { errorMessage = error.localizedDescription }
@@ -60,7 +74,11 @@ import PhotoViewsCore
     }
     func persistRecipe() {
         guard let catalog else { return }
-        do { try catalog.storeWorkspaceRecipe(recipe); refreshAssets() } catch { errorMessage = error.localizedDescription }
+        do {
+            assetLimit = 500
+            if hasSearch { recipe.modelVersion = "openclip-vit-b32-1a25a446712ba5ee05982a381eed697ef9b435cf:imageio-m2-v1:search-v1"; recipe.rankingVersion = "rrf-k60-v1" }
+            try catalog.storeWorkspaceRecipe(recipe); refreshAssets()
+        } catch { errorMessage = error.localizedDescription }
     }
     func selectAll() { selectedSavedView = nil; assetLimit = 500; recipe.sourceIDs = []; persistRecipe() }
     func selectSource(_ source: CatalogSource) { selectedSavedView = nil; assetLimit = 500; recipe.sourceIDs = [source.id]; persistRecipe() }
@@ -171,28 +189,113 @@ import PhotoViewsCore
         default: return p.total == 0 ? "Ready to index" : "\(p.total) photos"
         }
     }
+    var hasSearch: Bool { !recipe.search.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || recipe.referenceAssetID != nil }
+    var hasFilters: Bool { recipe.filters != ExactFilters() }
+    var isRankedSearch: Bool { recipe.referenceAssetID != nil || (hasSearch && searchMode == "visual") }
+    var referencePhoto: IndexedAsset? {
+        guard let id = recipe.referenceAssetID else { return nil }
+        return try? catalog?.indexedAssets(limit:1,assetID:id).first
+    }
+    var filterSummary: String {
+        var parts: [String] = []
+        if let camera = recipe.filters.camera { parts.append(camera) }
+        if let folder = recipe.filters.folder, !folder.isEmpty { parts.append("Folder: "+folder) }
+        let dates = DateFormatter(); dates.dateStyle = .medium
+        if let date = recipe.filters.fromDate { parts.append("From "+dates.string(from:date)) }
+        if let date = recipe.filters.toDate { parts.append("Through "+dates.string(from:date)) }
+        if let lens = recipe.filters.lens { parts.append(lens) }
+        if let iso = recipe.filters.minISO { parts.append("ISO ≥ "+iso.formatted()) }
+        if let iso = recipe.filters.maxISO { parts.append("ISO ≤ "+iso.formatted()) }
+        parts += recipe.filters.confirmedTags
+        if let format = recipe.filters.format { parts.append(format) }
+        return parts.joined(separator:" · ")
+    }
+    func clearFilters() { recipe.filters = ExactFilters() }
+    func exitSimilar() { recipe.referenceAssetID = nil; recipe.search = "" }
+    func findSimilar() {
+        guard let id = selectedAssetID else { return }
+        recipe.referenceAssetID = id; recipe.search = ""; searchMode = "visual"
+    }
+    private func requestRecipe() -> [String:Any] {
+        guard let data = try? JSONEncoder().encode(recipe), var value = try? JSONSerialization.jsonObject(with:data) as? [String:Any] else { return [:] }
+        var filters = value["filters"] as? [String:Any] ?? [:]
+        let formatter = DateFormatter(); formatter.calendar = Calendar(identifier:.gregorian); formatter.locale = Locale(identifier:"en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd"
+        if let date = recipe.filters.fromDate { filters["fromDay"] = formatter.string(from:date) }
+        if let date = recipe.filters.toDate { filters["toDay"] = formatter.string(from:date) }
+        value["filters"] = filters; return value
+    }
     func refreshAssets() {
         guard let catalog else { return }
-        do {
-            indexProgress = try catalog.progress()
-            assets = try catalog.indexedAssets(sourceIDs:recipe.sourceIDs,sort:recipe.sorting,limit:assetLimit,readyOnly:true,selectedID:selectedAssetID).map { value in
-                var asset = value
-                if let path = asset.thumbnailPath, !FileManager.default.fileExists(atPath:path) { asset.thumbnailPath = nil }
-                if let path = asset.analysisPath, !FileManager.default.fileExists(atPath:path) { asset.analysisPath = nil }
-                return asset
-            }
-            if let id = selectedAssetID {
-                let selected = try catalog.indexedAssets(limit:1,assetID:id).first
-                if var selected, recipe.sourceIDs.isEmpty || recipe.sourceIDs.contains(selected.asset.sourceID) {
-                    if let path = selected.thumbnailPath, !FileManager.default.fileExists(atPath:path) { selected.thumbnailPath = nil }
-                    if let path = selected.analysisPath, !FileManager.default.fileExists(atPath:path) { selected.analysisPath = nil }
-                    retainedSelection = selected
+        indexProgress = (try? catalog.progress()) ?? []
+        searchGeneration += 1; let generation = searchGeneration
+        searchTask?.cancel()
+        let payload: [String:Any] = ["op":"query","recipe":requestRecipe(),"mode":searchMode,"limit":assetLimit]
+        searching = true
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds:180_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.searchBridge.request(payload,as:SearchResult.self) { [weak self] response in
+                guard let self, self.searchGeneration == generation else { return }
+                self.searching = false
+                switch response {
+                case .success(let result):
+                    self.searchError = nil
+                    self.assets = result.assets.map { self.normalizeCache($0) }
+                    self.resultCount = result.resultCount; self.cameras = result.cameras; self.visualCoverage = result.coverage
+                    if let id = self.selectedAssetID {
+                        if let selected = self.assets.first(where:{ $0.id == id }) { self.retainedSelection = selected }
+                        else if !self.hasSearch && !self.hasFilters, let selected = try? catalog.indexedAssets(limit:1,assetID:id).first,
+                                self.recipe.sourceIDs.isEmpty || self.recipe.sourceIDs.contains(selected.asset.sourceID) { self.retainedSelection = self.normalizeCache(selected) }
+                        else { self.selectedAssetID = nil; self.retainedSelection = nil; self.previewPresented = false }
+                    }
+                case .failure(let error):
+                    self.searchError = error.localizedDescription; self.assets = []; self.resultCount = 0
                 }
-                else { selectedAssetID = nil; retainedSelection = nil; previewPresented = false }
             }
-        } catch { errorMessage = error.localizedDescription }
+        }
     }
-    func loadMore() { guard assetLimit < browseableAssets else { return }; assetLimit += 500; refreshAssets() }
+    private func normalizeCache(_ value: IndexedAsset) -> IndexedAsset {
+        var asset = value
+        if let path = asset.thumbnailPath, !FileManager.default.fileExists(atPath:path) { asset.thumbnailPath = nil }
+        if let path = asset.analysisPath, !FileManager.default.fileExists(atPath:path) { asset.analysisPath = nil }
+        return asset
+    }
+    func startVisualIndexing() {
+        guard isReady, !visualIndexing else { return }
+        visualPaused = false; UserDefaults.standard.set(false,forKey:"visualIndexingPaused")
+        visualIndexing = true; searchError = nil
+        indexVisualBatch()
+    }
+    func retryVisualFailures() {
+        guard !visualIndexing else { return }
+        searchBridge.request(["op":"retry"],as:SearchCoverage.self) { [weak self] response in
+            guard let self else { return }
+            switch response {
+            case .success: self.startVisualIndexing()
+            case .failure(let error): self.searchError = error.localizedDescription
+            }
+        }
+    }
+    func pauseVisualIndexing() {
+        visualPaused = true; UserDefaults.standard.set(true,forKey:"visualIndexingPaused")
+    }
+    private func indexVisualBatch() {
+        if visualPaused { visualIndexing = false; return }
+        searchBridge.request(["op":"index","limit":16],as:EmbeddingProgress.self) { [weak self] response in
+            guard let self else { return }
+            switch response {
+            case .success(let progress):
+                self.visualCoverage = SearchCoverage(total:progress.total,embedded:progress.embedded,failed:progress.failed)
+                if progress.processed == 0 || Date().timeIntervalSince(self.lastVisualRefresh) >= 1 {
+                    self.lastVisualRefresh = Date(); self.refreshAssets()
+                }
+                if progress.processed == 0 || self.visualPaused { self.visualIndexing = false }
+                else { self.indexVisualBatch() }
+            case .failure(let error): self.visualIndexing = false; self.searchError = error.localizedDescription
+            }
+        }
+    }
+    func loadMore() { guard assetLimit < resultCount else { return }; assetLimit += 500; refreshAssets() }
     func startIndexing(_ requested: [CatalogSource]? = nil) {
         let targets = requested ?? scopedSources
         guard !targets.isEmpty, isReady else { return }
@@ -208,11 +311,13 @@ import PhotoViewsCore
                     self.indexing = false; self.pausing = false
                     if let error { self.errorMessage = error }
                     self.refreshAccess()
+                    if !self.visualPaused { self.startVisualIndexing() }
                     if !self.queuedSources.isEmpty {
                         let queued = self.queuedSources; self.queuedSources = []; self.startIndexing(queued)
                     }
                 }
                 self.refreshAssets()
+                if !self.visualPaused { self.startVisualIndexing() }
             }
         })
         if started { indexing = true; pausing = false }

@@ -48,6 +48,11 @@ struct PhotoGrid: View {
             }
         }
         let keys = grouped.keys.sorted { a,b in
+            if model.isRankedSearch {
+                let firstA = model.assets.firstIndex { asset in grouped[a]!.contains { $0.id == asset.id } }
+                let firstB = model.assets.firstIndex { asset in grouped[b]!.contains { $0.id == asset.id } } ?? Int.max
+                return (firstA ?? Int.max) < firstB
+            }
             if a.hasPrefix("Unknown") { return false }; if b.hasPrefix("Unknown") { return true }
             return model.recipe.grouping == .month && model.recipe.sorting != .captureOldest ? a > b : a.localizedStandardCompare(b) == .orderedAscending
         }
@@ -59,7 +64,7 @@ struct PhotoGrid: View {
             ScrollViewReader { scroll in
                 ScrollView {
                     LazyVStack(alignment:.leading,spacing:24) {
-                        Text("\(model.assets.count) of \(model.browseableAssets) browseable photos loaded")
+                        Text(model.isRankedSearch ? "\(model.assets.count) nearest results · Ranked by similarity" : "\(model.assets.count) of \(model.resultCount) photos shown")
                             .font(.caption).foregroundStyle(.secondary)
                         ForEach(groups) { group in
                             if !group.id.isEmpty {
@@ -70,33 +75,25 @@ struct PhotoGrid: View {
                                     Button {
                                         model.selectAsset(asset.id); focused = true
                                     } label: {
-                                        VStack(alignment:.leading,spacing:6) {
-                                            CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0))
-                                                .frame(maxWidth:.infinity).frame(height:128)
-                                                .background(Color(nsColor:.controlBackgroundColor))
-                                                .overlay { if model.selectedAssetID == asset.id { Rectangle().strokeBorder(Color.accentColor,lineWidth:2) } }
-                                            Text(asset.filename).font(.caption).lineLimit(1).foregroundStyle(.primary)
-                                            HStack(spacing:4) {
-                                                Text(asset.metadata?.format ?? URL(fileURLWithPath:asset.asset.relativePath).pathExtension.uppercased())
-                                                if !model.originalAvailable(asset) { Label(asset.available ? "Offline" : "Missing",systemImage:"externaldrive.badge.xmark") }
-                                                else if asset.previewState == .failed { Label("Preview failed",systemImage:"exclamationmark.triangle") }
-                                                else if asset.previewState != .complete { Text("Preparing…") }
-                                                else if asset.thumbnailPath == nil { Text("Cache cleared") }
-                                            }.font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                                        }.contentShape(Rectangle())
+                                        CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0))
+                                            .frame(maxWidth:.infinity).frame(height:128)
+                                            .background(Color(nsColor:.controlBackgroundColor))
+                                            .overlay { if model.selectedAssetID == asset.id { Rectangle().strokeBorder(Color.accentColor,lineWidth:2) } }
+                                            .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                     .id(asset.id)
                                     .accessibilityLabel("\(asset.filename), \(asset.previewState == .failed ? "preview failed" : model.originalAvailable(asset) ? "original available" : "original offline")")
                                     .contextMenu {
                                         Button("Preview") { model.selectAsset(asset.id); model.previewPresented = true }
+                                        Button("Find Similar") { model.selectAsset(asset.id); model.findSimilar() }
                                         Button("Reveal Original in Finder") { model.selectAsset(asset.id); model.revealPhoto() }
                                     }
                                     .simultaneousGesture(TapGesture(count:2).onEnded { model.selectAsset(asset.id); model.previewPresented = true })
                                 }
                             }
                         }
-                        if model.assets.count < model.browseableAssets {
+                        if model.assets.count < model.resultCount {
                             Button("Load More Photos") { model.loadMore() }.onAppear { model.loadMore() }
                         }
                     }.padding(20)

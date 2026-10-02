@@ -13,6 +13,7 @@ struct WorkspaceView: View {
     @State private var saving = false
     @State private var viewName = ""
     @State private var filtersVisible = false
+    @State private var indexingDetails = false
     private let timer = Timer.publish(every:15,on:.main,in:.common).autoconnect()
 
     var body: some View {
@@ -113,54 +114,83 @@ struct WorkspaceView: View {
     }
     private var recipeBar: some View {
         VStack(alignment:.leading,spacing:12) {
-            HStack(spacing:Workbench.controlGap) {
-                Image(systemName:"magnifyingglass").foregroundStyle(.secondary)
-                TextField("Describe a photo or enter a keyword",text:$model.recipe.search)
-                    .textFieldStyle(.plain).accessibilityLabel("Photo search")
-                    .disabled(true)
-                    .help("Visual search is coming next. Browse photos and camera metadata now.")
+            if let reference = model.referencePhoto {
+                HStack(spacing:8) {
+                    CachedPhoto(path:reference.thumbnailPath,revision:reference.id.uuidString).frame(width:40,height:32)
+                    Text("Similar to \(reference.filename)").font(.subheadline).lineLimit(1)
+                    Spacer()
+                    Button("Exit Similar") { model.exitSimilar() }
+                }
+            } else {
+                HStack(spacing:8) {
+                    Image(systemName:"magnifyingglass").foregroundStyle(.secondary)
+                    TextField(model.searchMode == "visual" ? "Describe a photo…" : "Search filenames or folders…",text:$model.recipe.search)
+                        .textFieldStyle(.plain).accessibilityLabel("Search photos")
+                        .disabled(!model.isReady || model.sources.isEmpty)
+                    if !model.recipe.search.isEmpty {
+                        Button { model.recipe.search = "" } label: { Image(systemName:"xmark.circle.fill") }.buttonStyle(.plain).accessibilityLabel("Clear search")
+                    }
+                    Menu(model.searchMode == "visual" ? "Visual" : "Filename") {
+                        Picker("Search mode",selection:Binding(get:{ model.searchMode },set:{ model.searchMode = $0 })) {
+                            Text("Visual description").tag("visual")
+                            Text("Filename or keyword").tag("filename")
+                        }
+                    }.fixedSize().help("Choose visual descriptions or literal filename and keyword matching")
+                }
+                Text(model.searchMode == "visual" ? "Try “cars at night” or “a mountain lake”. Results are ranked by visual similarity." : "Matches filenames, folder paths and imported keywords.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+            }
+            HStack(spacing:8) {
+                Button { filtersVisible.toggle() } label: { Label(filtersVisible ? "Hide Filters" : model.hasFilters ? "Filters •" : "Filters",systemImage:"line.3.horizontal.decrease") }
+                Menu(model.recipe.grouping == .none ? "View" : "View · \(model.recipe.grouping.title)") {
+                    Picker("Group by",selection:$model.recipe.grouping) {
+                        ForEach(Grouping.allCases.filter { $0 != .subject }) { Text($0.title).tag($0) }
+                    }
+                    Picker("Sort",selection:$model.recipe.sorting) {
+                        ForEach(PhotoSort.allCases.filter { $0 != .relevance }) { Text($0.title).tag($0) }
+                    }.disabled(model.isRankedSearch)
+                    Divider()
+                    Button("Save View…") { viewName = model.selectedSavedView == nil ? "" : model.currentTitle; saving = true }
+                        .disabled(model.sources.isEmpty || !model.isReady)
+                    if model.selectedSavedView != nil && model.hasUnsavedChanges { Button("Update View") { model.saveView(name:model.currentTitle,update:true) } }
+                }.help("Group, sort or save this view")
+                Spacer(minLength:0)
                 if model.hasUnsavedChanges { Text("Edited").font(.caption).foregroundStyle(.secondary) }
-                if model.selectedSavedView != nil && model.hasUnsavedChanges {
-                    Button("Update View") { model.saveView(name:model.currentTitle,update:true) }
-                }
-                Button("Save View…") { viewName = model.selectedSavedView == nil ? "" : model.currentTitle; saving = true }
-                    .disabled(model.sources.isEmpty || !model.isReady)
+                if model.searching { ProgressView().controlSize(.small).accessibilityLabel("Searching photos") }
             }
-            ViewThatFits(in:.horizontal) {
-                HStack(spacing:12) { scopeAndFilters; Spacer(minLength:8); groupPicker; sortPicker }
-                VStack(alignment:.leading,spacing:12) {
-                    scopeAndFilters
-                    HStack(spacing:12) { groupPicker; sortPicker }
-                }
-                VStack(alignment:.leading,spacing:12) { scopeAndFilters; groupPicker; sortPicker }
+            if filtersVisible {
+                Divider()
+                ScrollView { filterControls.frame(maxWidth:.infinity,alignment:.leading) }.frame(height:260)
             }
-
-        }
-        .padding(Workbench.contentInset)
-    }
-    private var scopeAndFilters: some View {
-        HStack(spacing:12) {
-            Text(model.recipe.sourceIDs.isEmpty ? "All sources" : "Selected source")
-                .font(.caption).foregroundStyle(.secondary)
-            Button { filtersVisible.toggle() } label: { Label("Filters",systemImage:"line.3.horizontal.decrease") }
-                .popover(isPresented:$filtersVisible) {
-                    VStack(alignment:.leading,spacing:8) {
-                        Text("Metadata filters").font(.headline)
-                        Text("Metadata filters are coming next. You can group by camera, month, or folder now.")
-                            .foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-                    }.padding(16).frame(width:260)
+            if model.hasFilters {
+                HStack(alignment:.top,spacing:8) {
+                    Text(model.filterSummary).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                    Spacer(minLength:0)
+                    Button("Clear Filters") { model.clearFilters() }.font(.caption)
                 }
-        }.fixedSize(horizontal:true,vertical:false)
+            }
+        }.padding(Workbench.contentInset)
     }
-    private var groupPicker: some View {
-        Picker("Group by",selection:$model.recipe.grouping) {
-            ForEach(Grouping.allCases) { item in Text(item.title).tag(item).disabled(item == .subject) }
-        }.frame(width:165).help("Group photos in this view.")
-    }
-    private var sortPicker: some View {
-        Picker("Sort",selection:$model.recipe.sorting) {
-            ForEach(PhotoSort.allCases) { item in Text(item.title).tag(item).disabled(item == .relevance) }
-        }.frame(width:185)
+    private var filterControls: some View {
+        VStack(alignment:.leading,spacing:16) {
+            HStack { Text("Filter photos").font(.headline); Spacer(); Button("Done") { filtersVisible = false } }
+            Text("Only photos matching every filter are shown.").font(.caption).foregroundStyle(.secondary)
+            Picker("Camera",selection:Binding(get:{ model.recipe.filters.camera ?? "" },set:{ model.recipe.filters.camera = $0.isEmpty ? nil : $0 })) {
+                Text("Any camera").tag("")
+                ForEach(Array(Set(model.cameras + [model.recipe.filters.camera].compactMap { $0 })).sorted(),id:\.self) { Text($0).tag($0) }
+            }
+            TextField("Folder contains",text:Binding(get:{ model.recipe.filters.folder ?? "" },set:{ model.recipe.filters.folder = $0.isEmpty ? nil : $0 }))
+                .textFieldStyle(.roundedBorder).accessibilityLabel("Folder path contains")
+            VStack(alignment:.leading,spacing:8) {
+                Text("Capture date").font(.subheadline)
+                Toggle("From",isOn:Binding(get:{ model.recipe.filters.fromDate != nil },set:{ model.recipe.filters.fromDate = $0 ? Date() : nil }))
+                if model.recipe.filters.fromDate != nil { DatePicker("From date",selection:Binding(get:{ model.recipe.filters.fromDate ?? Date() },set:{ model.recipe.filters.fromDate = $0 }),displayedComponents:.date) }
+                Toggle("Through",isOn:Binding(get:{ model.recipe.filters.toDate != nil },set:{ model.recipe.filters.toDate = $0 ? Date() : nil }))
+                if model.recipe.filters.toDate != nil { DatePicker("Through date",selection:Binding(get:{ model.recipe.filters.toDate ?? Date() },set:{ model.recipe.filters.toDate = $0 }),displayedComponents:.date) }
+                Text("Uses dates recorded by the camera. Unknown dates are excluded when a date filter is active.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+            }
+            Button("Clear All Filters") { model.clearFilters() }.disabled(!model.hasFilters)
+        }.padding(20).frame(width:320)
     }
     @ViewBuilder private var content: some View {
         if !model.isReady {
@@ -171,6 +201,17 @@ struct WorkspaceView: View {
             emptyState(icon:"photo.on.rectangle.angled",title:"Your photos, in place",detail:"Add a folder to start your catalog. Originals stay where they are; views will give you new ways to find them.") {
                 Button("Add Folder…") { model.chooseFolder() }.buttonStyle(.borderedProminent)
                     .keyboardShortcut("o",modifiers:[.command])
+            }
+        } else if let error = model.searchError {
+            emptyState(icon:"exclamationmark.triangle",title:"Search needs attention",detail:error) {
+                Button("Try Again") { model.refreshAssets() }
+            }
+        } else if model.assets.isEmpty && model.searching {
+            emptyState(icon:"magnifyingglass",title:"Loading photos…",detail:"Preparing your local results.") { ProgressView().controlSize(.small) }
+        } else if model.assets.isEmpty && (model.hasSearch || model.hasFilters) {
+            emptyState(icon:"magnifyingglass",title:model.searching ? "Searching photos…" : "No matching photos",detail:model.isRankedSearch && model.visualCoverage.total > 0 && model.visualCoverage.embedded == 0 ? "Visual indexing needs to finish some photos first. You can use Filename search now." : "Try another search or edit the filters. Your filters have not been relaxed.") {
+                if model.hasFilters { Button("Clear Filters") { model.clearFilters() } }
+                if model.hasSearch { Button("Clear Search") { model.exitSimilar() } }
             }
         } else if !model.assets.isEmpty {
             PhotoGrid(model:model)
@@ -217,7 +258,7 @@ struct WorkspaceView: View {
                     Text("View recipe").font(.subheadline.weight(.semibold))
                     LabeledContent("Sources",value:model.recipe.sourceIDs.isEmpty ? "All sources" : "Selected sources")
                     LabeledContent("Group by",value:model.recipe.grouping.title)
-                    LabeledContent("Sort",value:model.recipe.sorting.title)
+                    LabeledContent("Sort",value:model.isRankedSearch ? "Similarity" : model.recipe.sorting.title)
                     if model.selectedSavedView != nil {
                         Text(model.hasUnsavedChanges ? "Changes haven’t been saved." : "Saved view settings")
                             .font(.caption).foregroundStyle(.secondary)
@@ -228,36 +269,50 @@ struct WorkspaceView: View {
         .background(Color(nsColor:.controlBackgroundColor))
     }
     private var indexingBar: some View {
-        VStack(alignment:.leading,spacing:8) {
+        Group {
             if !model.sources.isEmpty {
-                HStack(spacing:8) {
-                    if model.indexing { ProgressView().controlSize(.small) }
-                    Text(model.discovering ? "Discovering photos…" : "\(model.completedPreviews) of \(model.totalAssets) previews indexed\(model.paused ? " · Paused" : "")")
-                        .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                    if model.failedPreviews > 0 { Text("\(model.failedPreviews) failed").font(.caption).foregroundStyle(.secondary) }
-                    Spacer(minLength:0)
-                    if model.indexing {
-                        Button(model.pausing ? "Pausing…" : "Pause") { model.pauseIndexing() }.disabled(model.pausing)
-                    } else {
-                        Button(model.paused ? "Resume" : model.totalAssets == 0 ? "Start Indexing" : "Refresh Folders") { model.startIndexing() }
+                DisclosureGroup(isExpanded:$indexingDetails) {
+                    VStack(alignment:.leading,spacing:10) {
+                        HStack {
+                            Text("Previews: \(model.completedPreviews) of \(model.totalAssets)").font(.caption)
+                            Spacer()
+                            Button(model.indexing ? (model.pausing ? "Pausing…" : "Pause Previews") : "Resume Previews") { if model.indexing { model.pauseIndexing() } else { model.startIndexing() } }.disabled(model.pausing)
+                        }
+                        HStack {
+                            Text("Visual search: \(model.visualCoverage.embedded) of \(model.visualCoverage.total)").font(.caption)
+                            Spacer()
+                            Button(model.visualIndexing ? (model.visualPaused ? "Pausing…" : "Pause Visual Indexing") : "Build Visual Index") { if model.visualIndexing { model.pauseVisualIndexing() } else { model.startVisualIndexing() } }.disabled(model.visualIndexing && model.visualPaused)
+                        }
+                        if model.visualCoverage.failed > 0 {
+                            Text("\(model.visualCoverage.failed) photos need attention").font(.caption)
+                            ForEach(model.visualCoverage.failures ?? [],id:\.assetID) { failure in
+                                VStack(alignment:.leading,spacing:4) {
+                                    Button(failure.filename) { model.selectAsset(failure.assetID) }
+                                    Text(failure.error).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                                }
+                            }
+                            Button("Retry Failed Photos") { model.retryVisualFailures() }.disabled(model.visualIndexing)
+                        }
+                        if let error = model.scopedProgress.compactMap({ $0.error }).first { Text(error).font(.caption).foregroundStyle(.secondary) }
+                        Text("Photos stay in their folders. Indexing resumes from saved progress.").font(.caption).foregroundStyle(.secondary)
+                    }.padding(.top,8)
+                } label: {
+                    HStack(spacing:8) {
+                        if model.indexing || model.visualIndexing { ProgressView().controlSize(.small) }
+                        Text("\(model.visualCoverage.embedded) of \(model.visualCoverage.total) photos visually indexed")
+                            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     }
-                }
-                if model.pausing { Text("Pausing after the current photo…").font(.caption).foregroundStyle(.secondary) }
-                if model.recipe.grouping == .subject { Text("Subject grouping is coming with tags; photos are currently ungrouped.").font(.caption).foregroundStyle(.secondary) }
-                if model.recipe.sorting == .relevance { Text("Relevance sorting is coming with search; photos currently use newest first.").font(.caption).foregroundStyle(.secondary) }
-                if model.totalAssets > 0 {
-                    Text("\(model.metadataReady) metadata records ready · Visual search comes next")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
-                if let error = model.scopedProgress.compactMap({ $0.error }).first { Text(error).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
+                }.padding(.horizontal,20).padding(.vertical,10)
             }
-        }.padding(.horizontal,20).padding(.vertical,model.sources.isEmpty ? 0 : 12)
+        }
     }
     private func photoDetails(_ asset: IndexedAsset) -> some View {
         VStack(alignment:.leading,spacing:12) {
             Text(asset.filename).font(.body.weight(.medium)).textSelection(.enabled)
             CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0)).frame(height:128)
             Button("Open Preview") { model.previewPresented = true }
+            Button("Find Similar") { model.findSimilar() }
+                .disabled(model.visualCoverage.embedded == 0)
             Button("Reveal Original in Finder") { model.revealPhoto() }
             LabeledContent("Original",value:model.originalAvailable(asset) ? "Available" : asset.available ? "Drive disconnected" : "Missing")
             if let metadata = asset.metadata {
