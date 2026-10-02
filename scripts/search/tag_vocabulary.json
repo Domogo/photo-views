@@ -1,0 +1,79 @@
+{
+  "version": "general-subjects-v1",
+  "calibration": "Per-tag cutoffs from event-separated local agent-reviewed sample; human acceptance and held-out precision targets remain open. A cutoff above 1 suppresses tags with insufficient tuning evidence.",
+  "maxSuggestions": 3,
+  "tags": [
+    {
+      "tag": "people",
+      "prompts": [
+        "a photo of people",
+        "a photograph of a person",
+        "a photo of a crowd"
+      ],
+      "threshold": 0.246472
+    },
+    {
+      "tag": "animals",
+      "prompts": [
+        "a photo of an animal",
+        "a photograph of wildlife",
+        "a photo of a pet"
+      ],
+      "threshold": 0.262388
+    },
+    {
+      "tag": "cars",
+      "prompts": [
+        "a photo of a car",
+        "a photograph of cars",
+        "a photo of an automobile"
+      ],
+      "threshold": 0.25
+    },
+    {
+      "tag": "buildings",
+      "prompts": [
+        "a photo of buildings",
+        "a photograph of architecture",
+        "a photo of a building"
+      ],
+      "threshold": 0.247556
+    },
+    {
+      "tag": "food",
+      "prompts": [
+        "a photo of food",
+        "a photograph of a meal",
+        "a photo of a dish of food"
+      ],
+      "threshold": 0.25
+    },
+    {
+      "tag": "mountains",
+      "prompts": [
+        "a photo of mountains",
+        "a photograph of a mountain landscape",
+        "a photo of a mountain"
+      ],
+      "threshold": 0.25
+    },
+    {
+      "tag": "water",
+      "prompts": [
+        "a photo of a lake",
+        "a photograph of the sea",
+        "a photo of a river"
+      ],
+      "threshold": 0.230986
+    },
+    {
+      "tag": "vegetation",
+      "prompts": [
+        "a photo of trees",
+        "a photograph of plants",
+        "a photo of a forest"
+      ],
+      "threshold": 0.244164
+    }
+  ]
+}

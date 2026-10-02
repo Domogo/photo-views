@@ -56,6 +56,8 @@ extension Catalog {
                 try run("DELETE FROM metadata WHERE asset_id=?",[id.uuidString])
                 try run("DELETE FROM derivatives WHERE asset_id=?",[id.uuidString])
                 try run("DELETE FROM embeddings WHERE asset_id=?",[id.uuidString])
+                try run("DELETE FROM tag_runs WHERE asset_id=?",[id.uuidString])
+                try run("DELETE FROM tag_assignments WHERE asset_id=? AND provenance='suggested' AND decision='unconfirmed'",[id.uuidString])
                 try run("UPDATE assets SET content_hash=NULL WHERE id=?",[id.uuidString])
                 try run("DELETE FROM index_jobs WHERE asset_id=?",[id.uuidString])
             }
@@ -73,6 +75,7 @@ extension Catalog {
         try run("UPDATE index_jobs SET state='pending' WHERE source_id=? AND state IN ('running','paused')",[sourceID.uuidString])
     }
     public func queuePreview(_ id: UUID) throws {
+        try run("DELETE FROM tag_runs WHERE asset_id=?",[id.uuidString])
         try run("UPDATE index_jobs SET state='pending',error=NULL WHERE asset_id=? AND stage='metadata' AND state='failed'",[id.uuidString])
         try run("UPDATE index_jobs SET state='pending',error=NULL WHERE asset_id=? AND stage='preview' AND pipeline_version=?",[id.uuidString,ImagePipeline.version])
     }

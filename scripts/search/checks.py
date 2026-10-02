@@ -9,20 +9,23 @@ class SearchChecks(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.path=Path(self.tmp.name)/'catalog.sqlite'
         db=sqlite3.connect(self.path)
-        db.executescript('''CREATE TABLE assets(id TEXT PRIMARY KEY,source_id TEXT,relative_path TEXT,file_id TEXT,byte_size INTEGER,modified_at REAL,available INTEGER);
+        db.executescript('''CREATE TABLE assets(id TEXT PRIMARY KEY,source_id TEXT,relative_path TEXT,file_id TEXT,byte_size INTEGER,modified_at REAL,available INTEGER,favorite INTEGER DEFAULT 0);
         CREATE TABLE metadata(asset_id TEXT,payload BLOB,capture_date REAL);
         CREATE TABLE derivatives(asset_id TEXT,thumbnail_path TEXT,analysis_path TEXT,pipeline_version TEXT,preview_source TEXT);
         CREATE TABLE index_jobs(id TEXT,source_id TEXT,asset_id TEXT,stage TEXT,state TEXT,error TEXT,pipeline_version TEXT,updated_at REAL,UNIQUE(asset_id,stage,pipeline_version));
         CREATE TABLE embeddings(asset_id TEXT,model_version TEXT,dimensions INTEGER,vector BLOB,PRIMARY KEY(asset_id,model_version));
-        CREATE TABLE tag_assignments(asset_id TEXT,tag TEXT,provenance TEXT,decision TEXT);''')
+        CREATE TABLE tag_assignments(asset_id TEXT,tag TEXT,provenance TEXT,decision TEXT,id TEXT,model_version TEXT,score REAL,threshold REAL,vocabulary_version TEXT);
+        CREATE TABLE tag_runs(asset_id TEXT PRIMARY KEY,vocabulary_version TEXT,model_version TEXT,input_fingerprint TEXT);
+        CREATE TABLE collections(id TEXT PRIMARY KEY,name TEXT);
+        CREATE TABLE collection_assets(collection_id TEXT,asset_id TEXT,PRIMARY KEY(collection_id,asset_id));''')
         for id,source,path,camera,day,score in [('a','one','Japan/car.jpg','Nikon','2025:11:06',1),('b','one','Japan/lake.nef','Nikon','2025:11:07',.8),('c','two','Elsewhere/car.arw','Sony','2024:01:01',.9),('d','one','Unknown/car.jpg',None,None,.7)]:
-            db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?)',[id,source,path,None,10,123,0])
+            db.execute('INSERT INTO assets(id,source_id,relative_path,file_id,byte_size,modified_at,available) VALUES(?,?,?,?,?,?,?)',[id,source,path,None,10,123,0])
             db.execute('INSERT INTO metadata VALUES(?,?,?)',[id,json.dumps({'camera':camera,'captureDateText':day,'format':Path(path).suffix[1:].upper()}).encode(),123])
             db.execute('INSERT INTO derivatives VALUES(?,?,?,?,?)',[id,None,None,'imageio-m2-v1','fixture'])
             db.execute('INSERT INTO index_jobs VALUES(?,?,?,?,?,?,?,?)',[id,source,id,'preview','complete',None,'imageio-m2-v1',1])
             vector=np.zeros(512,dtype='<f4');vector[0]=score;vector[1]=np.sqrt(1-score*score)
             db.execute('INSERT INTO embeddings VALUES(?,?,?,?)',[id,MODEL_VERSION,512,vector.tobytes()])
-        db.execute('INSERT INTO tag_assignments VALUES(?,?,?,?)',['b','mountain','imported','unconfirmed'])
+        db.execute('INSERT INTO tag_assignments(asset_id,tag,provenance,decision) VALUES(?,?,?,?)',['b','mountain','imported','unconfirmed'])
         db.commit();db.close()
         self.worker=Worker(self.path,Path(self.tmp.name));self.worker.model=object();self.worker.np=np
     def tearDown(self):self.worker.db.close();self.tmp.cleanup()
@@ -82,7 +85,7 @@ class SearchChecks(unittest.TestCase):
         recipe={'search':'car','searchMode':'filename','sourceIDs':['one'],'filters':{'camera':'Nikon'},'grouping':'month','sorting':'filename','modelVersion':MODEL_VERSION,'rankingVersion':'rrf-k60-v1'}
         self.worker.db.execute('INSERT INTO saved_views VALUES(?,?)',['view',json.dumps(recipe)]);self.worker.db.commit()
         self.assertEqual(self.query(recipe)['resultCount'],1)
-        self.worker.db.execute("INSERT INTO assets VALUES('new','one','Japan/car-new.jpg',NULL,10,123,0)")
+        self.worker.db.execute("INSERT INTO assets(id,source_id,relative_path,file_id,byte_size,modified_at,available) VALUES('new','one','Japan/car-new.jpg',NULL,10,123,0)")
         self.worker.db.execute("INSERT INTO metadata VALUES('new',?,123)",[json.dumps({'camera':'Nikon','captureDateText':'2025:11:08'}).encode()])
         self.worker.db.execute("INSERT INTO index_jobs VALUES('new','one','new','preview','pending',NULL,'imageio-m2-v1',1)");self.worker.db.commit()
         self.assertEqual(self.query(recipe)['resultCount'],1)
@@ -96,6 +99,49 @@ class SearchChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'different search model'):self.query(recipe)
             self.assertEqual(recipe[field],'old-version')
         self.assertEqual(self.query({'referenceAssetID':'a','modelVersion':MODEL_VERSION,'rankingVersion':'rrf-k60-v1'})['resultCount'],3)
+    def test_favorites_collections_are_exact_and_manual(self):
+        self.worker.db.execute("UPDATE assets SET favorite=1 WHERE id='b'")
+        self.worker.db.execute("INSERT INTO collection_assets VALUES('trip','a')");self.worker.db.commit()
+        self.assertEqual(self.query({'favoritesOnly':True})['assets'][0]['asset']['id'],'b')
+        self.assertEqual(self.query({'collectionID':'trip'})['resultCount'],1)
+        self.assertEqual(self.query({'collectionID':'trip','filters':{'camera':'Sony'}})['resultCount'],0)
+        self.assertEqual(self.query({'collectionID':"trip' OR 1=1 --"})['resultCount'],0)
+    def test_suggestions_searchable_but_not_confirmed_and_rejections_excluded(self):
+        self.worker.db.execute("INSERT INTO tag_assignments VALUES('b','water','suggested','unconfirmed','tag',?,.4,.3,?)",[MODEL_VERSION,self.worker.tag_version]);self.worker.db.commit()
+        self.assertEqual(self.query({'search':'water'})['resultCount'],1)
+        self.assertEqual(self.query({'filters':{'confirmedTags':['water']}})['resultCount'],0)
+        self.worker.db.execute("UPDATE tag_assignments SET decision='accepted' WHERE id='tag'");self.worker.db.commit()
+        self.assertEqual(self.query({'filters':{'confirmedTags':['water']}})['resultCount'],1)
+        self.worker.db.execute("UPDATE tag_assignments SET provenance='manual',decision='rejected' WHERE id='tag'");self.worker.db.commit()
+        self.assertEqual(self.query({'search':'water'})['resultCount'],0)
+        self.assertEqual(self.query({'filters':{'confirmedTags':['water']}})['resultCount'],0)
+    def test_primary_subject_confirmed_precedence_unknown_and_stale(self):
+        self.worker.db.execute("INSERT INTO tag_assignments VALUES('b','water','suggested','unconfirmed','s',?,.4,.3,?)",[MODEL_VERSION,self.worker.tag_version])
+        self.worker.db.execute("INSERT INTO tag_assignments VALUES('b','cars','manual','accepted','m',NULL,NULL,NULL,NULL)");self.worker.db.commit()
+        photo=self.query({'search':'lake'})['assets'][0]
+        self.assertEqual(photo['primarySubject'],'cars');self.assertFalse(photo['primarySubjectSuggested'])
+        self.worker.db.execute("UPDATE tag_assignments SET decision='rejected' WHERE id='m'");self.worker.db.commit()
+        photo=self.query({'search':'lake'})['assets'][0];self.assertEqual(photo['primarySubject'],'water');self.assertTrue(photo['primarySubjectSuggested'])
+        self.worker.db.execute("UPDATE tag_assignments SET vocabulary_version='old' WHERE id='s'");self.worker.db.commit()
+        self.assertIsNone(self.query({'search':'lake'})['assets'][0]['primarySubject'])
+    def test_tag_batches_checkpoint_decisions_and_uniform_preview(self):
+        from PIL import Image
+        image=Path(self.tmp.name)/'preview.jpg';Image.new('RGB',(20,20),'black').save(image)
+        self.worker.db.execute('UPDATE derivatives SET thumbnail_path=?',[str(image)]);self.worker.db.commit()
+        self.worker.tag_vectors=np.zeros((8,512),dtype='<f4');self.worker.tag_vectors[:,0]=1
+        self.assertEqual(self.worker.tag_batch(),4)
+        self.assertEqual(self.worker.db.execute("SELECT count(*) FROM tag_assignments WHERE provenance='suggested'").fetchone()[0],0)
+        self.assertEqual(self.worker.tag_batch(),0) # completed empty runs do not repeat
+        im=Image.new('RGB',(20,20),'black');im.paste('white',(0,0,10,20));im.save(image)
+        self.worker.db.execute('DELETE FROM tag_runs')
+        self.worker.db.execute("INSERT INTO tag_assignments VALUES('a','cars','suggested','rejected','reject',?,.5,.3,?)",[MODEL_VERSION,self.worker.tag_version])
+        self.worker.db.execute("INSERT INTO tag_assignments VALUES('b','water','manual','accepted','manual',NULL,NULL,NULL,NULL)");self.worker.db.commit()
+        self.assertEqual(self.worker.tag_batch(limit=2),2)
+        self.assertEqual(self.worker.db.execute("SELECT count(*) FROM tag_assignments WHERE asset_id='a' AND tag='cars'").fetchone()[0],1)
+        self.assertEqual(self.worker.db.execute("SELECT decision FROM tag_assignments WHERE id='reject'").fetchone()[0],'rejected')
+        self.assertEqual(self.worker.db.execute("SELECT provenance FROM tag_assignments WHERE id='manual'").fetchone()[0],'manual')
+        self.worker.tag_version='next-vocabulary';self.worker.tag_batch()
+        self.assertEqual(self.worker.db.execute("SELECT decision FROM tag_assignments WHERE id='reject'").fetchone()[0],'rejected')
     def test_invalid_protocol(self):
         with self.assertRaises(ValueError):self.worker.handle({'protocol':999,'op':'query'})
 

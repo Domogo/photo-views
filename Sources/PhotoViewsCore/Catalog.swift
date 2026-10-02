@@ -16,7 +16,7 @@ public enum CatalogError: LocalizedError {
 public final class Catalog {
     var db: OpaquePointer?
     public let url: URL
-    public static let schemaVersion = 2
+    public static let schemaVersion = 3
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
     let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -36,6 +36,7 @@ public final class Catalog {
             guard version <= Self.schemaVersion else { throw CatalogError.unsupportedVersion(version) }
             if version == 0 { try migrate() }
             if try scalar("PRAGMA user_version") == 1 { try migrateIndexing() }
+            if try scalar("PRAGMA user_version") == 2 { try migrateOrganization() }
             try execute("PRAGMA journal_mode=WAL")
         } catch {
             if let db { sqlite3_close(db) }; db = nil
@@ -45,6 +46,21 @@ public final class Catalog {
     deinit { if let db { sqlite3_close(db) } }
     public var version: Int { get throws { try scalar("PRAGMA user_version") } }
 
+    private func migrateOrganization() throws {
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try execute("""
+            ALTER TABLE tag_assignments ADD COLUMN score REAL;
+            ALTER TABLE tag_assignments ADD COLUMN threshold REAL;
+            ALTER TABLE tag_assignments ADD COLUMN vocabulary_version TEXT;
+            CREATE INDEX tag_asset_name ON tag_assignments(asset_id,tag COLLATE NOCASE);
+            CREATE TABLE tag_runs(asset_id TEXT PRIMARY KEY REFERENCES assets(id), vocabulary_version TEXT NOT NULL,
+              model_version TEXT NOT NULL, input_fingerprint TEXT NOT NULL);
+            PRAGMA user_version=3;
+            """)
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
     private func migrateIndexing() throws {
         try execute("BEGIN IMMEDIATE")
         do {

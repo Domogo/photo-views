@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Versioned stdin/stdout worker. Local derivatives, SQLite and offline model only."""
-import argparse, json, math, os, sqlite3, sys, time
+import argparse, hashlib, json, math, os, sqlite3, sys, time, uuid
 from pathlib import Path
 
 PROTOCOL = 1
@@ -14,6 +14,9 @@ def constraints(recipe):
     sources = recipe.get('sourceIDs', [])
     if sources:
         clauses.append('a.source_id IN (' + ','.join('?' for _ in sources) + ')'); values.extend(sources)
+    if recipe.get('favoritesOnly'): clauses.append('a.favorite=1')
+    if recipe.get('collectionID'):
+        clauses.append('EXISTS(SELECT 1 FROM collection_assets ca WHERE ca.asset_id=a.id AND ca.collection_id=?)');values.append(recipe['collectionID'])
     f = recipe.get('filters', {})
     for key in ('camera', 'lens', 'format'):
         if f.get(key):
@@ -28,7 +31,7 @@ def constraints(recipe):
         if f.get(key) is not None:
             clauses.append("json_extract(CAST(m.payload AS TEXT),'$.iso')"+op+'?'); values.append(f[key])
     for tag in f.get('confirmedTags', []):
-        clauses.append("EXISTS(SELECT 1 FROM tag_assignments t WHERE t.asset_id=a.id AND t.tag=? AND (t.provenance='manual' OR t.decision='accepted'))"); values.append(tag)
+        clauses.append("EXISTS(SELECT 1 FROM tag_assignments t WHERE t.asset_id=a.id AND t.tag=? AND t.decision!='rejected' AND (t.provenance='manual' OR t.decision='accepted'))"); values.append(tag)
     return clauses, values
 
 
@@ -48,6 +51,10 @@ class Worker:
         self.model_dir = Path(model)
         self.model = None
         self.version = MODEL_VERSION
+        config_path=Path(__file__).with_name('tag_vocabulary.json')
+        self.tag_config=json.loads(config_path.read_text())
+        self.tag_version=self.tag_config['version']+':'+hashlib.sha256(config_path.read_bytes()).hexdigest()[:12]
+        self.tag_vectors=None
 
     def load_model(self):
         if self.model is not None: return
@@ -73,6 +80,64 @@ class Worker:
         failed = self.db.execute('SELECT count(*)'+failed_sql,[self.version]+args).fetchone()[0]
         failures = [{'assetID':r['id'],'filename':Path(r['relative_path']).name,'error':r['error']} for r in self.db.execute('SELECT a.id,a.relative_path,ij.error'+failed_sql+' ORDER BY a.id LIMIT 3',[self.version]+args)]
         return {'total':row[0], 'embedded':row[1] or 0, 'failed':failed,'failures':failures}
+
+    def tag_coverage(self, recipe):
+        clauses,args=constraints(recipe)
+        where=' WHERE '+' AND '.join(clauses) if clauses else ''
+        count=self.db.execute('SELECT count(*),sum(CASE WHEN tr.asset_id IS NOT NULL THEN 1 ELSE 0 END) FROM assets a LEFT JOIN metadata m ON m.asset_id=a.id LEFT JOIN tag_runs tr ON tr.asset_id=a.id AND tr.vocabulary_version=? AND tr.model_version=?'+where,[self.tag_version,self.version]+args).fetchone()
+        return {'total':count[0],'prepared':count[1] or 0}
+
+    def tag_features(self):
+        self.load_model()
+        if self.tag_vectors is not None:return self.tag_vectors
+        features=[]
+        for item in self.tag_config['tags']:
+            with self.torch.inference_mode(): v=self.model.encode_text(self.tokenizer(item['prompts']).to(self.device),normalize=True).cpu().numpy().mean(axis=0)
+            features.append(v/self.np.linalg.norm(v))
+        self.tag_vectors=self.np.stack(features);return self.tag_vectors
+
+    def tag_batch(self, limit=128):
+        rows=self.db.execute("""SELECT e.asset_id,e.vector,d.thumbnail_path,d.analysis_path FROM embeddings e LEFT JOIN derivatives d ON d.asset_id=e.asset_id LEFT JOIN tag_runs tr ON tr.asset_id=e.asset_id
+            WHERE e.model_version=? AND (tr.asset_id IS NULL OR tr.vocabulary_version!=? OR tr.model_version!=?) ORDER BY e.asset_id LIMIT ?""",[self.version,self.tag_version,self.version,min(128,max(1,limit))]).fetchall()
+        if not rows:return 0
+        features=self.tag_features()
+        for row in rows:
+            vector=self.np.frombuffer(row['vector'],dtype='<f4')
+            if vector.shape!=(512,) or not self.np.isfinite(vector).all():raise ValueError('Invalid cached vector for suggested tags.')
+            # Uniform/absent cached previews cannot support inspectable visual suggestions.
+            from PIL import Image
+            path=next((Path(p) for p in (row['thumbnail_path'],row['analysis_path']) if p and Path(p).is_file()),None)
+            usable=False
+            if path:
+                try:
+                    with Image.open(path) as image: low,high=image.convert('L').getextrema();usable=high-low>=3
+                except (OSError,ValueError):pass
+            scores=features @ vector
+            candidates=sorted([(item,float(scores[i])) for i,item in enumerate(self.tag_config['tags']) if usable and float(scores[i])>=item['threshold']],key=lambda v:(-v[1],v[0]['tag']))[:self.tag_config['maxSuggestions']]
+            with self.db:
+                current=self.db.execute('SELECT vector FROM embeddings WHERE asset_id=? AND model_version=?',[row['asset_id'],self.version]).fetchone()
+                if current is None or current[0]!=row['vector']:continue
+                self.db.execute("DELETE FROM tag_assignments WHERE asset_id=? AND provenance='suggested' AND decision='unconfirmed'",[row['asset_id']])
+                for item,score in candidates:
+                    # A user decision overrides every model/vocabulary revision, including rejected manual tags.
+                    prior=self.db.execute('SELECT 1 FROM tag_assignments WHERE asset_id=? AND tag=? COLLATE NOCASE',[row['asset_id'],item['tag']]).fetchone()
+                    if prior:continue
+                    self.db.execute("INSERT INTO tag_assignments(id,asset_id,tag,provenance,decision,model_version,score,threshold,vocabulary_version) VALUES(?,?,?,'suggested','unconfirmed',?,?,?,?)",[str(uuid.uuid4()).upper(),row['asset_id'],item['tag'],self.version,score,item['threshold'],self.tag_version])
+                self.db.execute('INSERT OR REPLACE INTO tag_runs VALUES(?,?,?,?)',[row['asset_id'],self.tag_version,self.version,hashlib.sha256(row['vector']).hexdigest()])
+        return len(rows)
+
+    def subjects(self, ids):
+        vocabulary={v['tag'] for v in self.tag_config['tags']};result={}
+        if not ids:return result
+        # Read current catalog decisions once. No inference is involved in grouping.
+        for row in self.db.execute("SELECT asset_id,tag,provenance,decision,model_version,score,threshold,vocabulary_version FROM tag_assignments WHERE decision!='rejected'"):
+            if row['asset_id'] not in ids or row['tag'] not in vocabulary:continue
+            confirmed=row['provenance']=='manual' or row['decision']=='accepted'
+            suggested=row['provenance']=='suggested' and row['decision']=='unconfirmed' and row['model_version']==self.version and row['vocabulary_version']==self.tag_version and row['score'] is not None and row['threshold'] is not None and row['score']>=row['threshold']
+            if confirmed or suggested:
+                key=(0 if confirmed else 1,-(row['score'] or 0),row['tag'])
+                if row['asset_id'] not in result or key<result[row['asset_id']][0]:result[row['asset_id']]=(key,row['tag'],not confirmed)
+        return result
 
     def index_batch(self, request):
         from PIL import Image
@@ -105,7 +170,8 @@ class Worker:
             except Exception as error:
                 with self.db: self.job(row,'failed',str(error))
                 failed += 1
-        return {'processed':len(rows),'completed':done,'failedBatch':failed,**self.coverage(recipe)}
+        tagged=self.tag_batch()
+        return {'tagged':tagged,'processed':len(rows)+tagged,'completed':done,'failedBatch':failed,**self.coverage(recipe)}
 
     def job(self, row, state, error):
         self.db.execute("""INSERT INTO index_jobs(id,source_id,asset_id,stage,state,error,pipeline_version,updated_at)
@@ -117,7 +183,7 @@ class Worker:
         recipe = request.get('recipe', {})
         clauses, args = constraints(recipe)
         clauses.append("j.state IN ('complete','failed')")
-        rows = self.db.execute("""SELECT a.id,a.source_id,a.relative_path,a.file_id,a.byte_size,a.modified_at,a.available,
+        rows = self.db.execute("""SELECT a.id,a.source_id,a.relative_path,a.file_id,a.byte_size,a.modified_at,a.available,a.favorite,
           m.payload,m.capture_date,d.thumbnail_path,d.analysis_path,d.pipeline_version,d.preview_source,j.state,j.error,
           e.vector FROM assets a LEFT JOIN metadata m ON m.asset_id=a.id LEFT JOIN derivatives d ON d.asset_id=a.id
           LEFT JOIN index_jobs j ON j.asset_id=a.id AND j.stage='preview' AND j.pipeline_version='imageio-m2-v1'
@@ -132,9 +198,9 @@ class Worker:
             for row in rows:
                 name = row['relative_path'].casefold()
                 if text.casefold() in name: matched.append((0 if Path(name).name == text.casefold() else 1,len(name),row['id']))
-            # Existing imported/manual/accepted keywords are searchable; suggested labels are not confirmed.
+            # Suggestions participate in keyword search, but never satisfy confirmed-tag constraints.
             if text:
-                tag_ids = {r[0] for r in self.db.execute("SELECT asset_id FROM tag_assignments WHERE instr(lower(tag),lower(?))>0 AND (provenance IN ('imported','manual') OR decision='accepted')",[text])}
+                tag_ids = {r[0] for r in self.db.execute("SELECT asset_id FROM tag_assignments WHERE instr(lower(tag),lower(?))>0 AND decision!='rejected' AND (provenance IN ('imported','manual') OR decision='accepted' OR (provenance='suggested' AND decision='unconfirmed' AND model_version=? AND vocabulary_version=?))",[text,self.version,self.tag_version])}
                 matched += [(2,0,id) for id in tag_ids if id in by_id and not any(v[2]==id for v in matched)]
             return [r[2] for r in sorted(matched)]
         searching = bool(text or reference)
@@ -167,22 +233,24 @@ class Worker:
         limit = min(10000,max(1,request.get('limit',500)))
         eligible = set(ranked[:100] if searching and mode!='filename' else ranked)
         ranked = ranked[:min(limit,100) if searching and mode!='filename' else limit]
+        subjects=self.subjects(eligible)
         def asset_payload(id):
             row=by_id[id]; metadata=json.loads(row['payload']) if row['payload'] else None
-            return {'asset':{'id':id,'sourceID':row['source_id'],'relativePath':row['relative_path'],'fileID':row['file_id'],'byteSize':row['byte_size'],'modifiedAt':row['modified_at']-978307200 if row['modified_at'] is not None else None},'available':bool(row['available']), 'metadata':metadata,'thumbnailPath':row['thumbnail_path'],'analysisPath':row['analysis_path'],'pipelineVersion':row['pipeline_version'],'previewSource':row['preview_source'],'previewState':row['state'],'error':row['error']}
+            return {'favorite':bool(row['favorite']),'primarySubject':subjects[id][1] if id in subjects else None,'primarySubjectSuggested':subjects[id][2] if id in subjects else False,'asset':{'id':id,'sourceID':row['source_id'],'relativePath':row['relative_path'],'fileID':row['file_id'],'byteSize':row['byte_size'],'modifiedAt':row['modified_at']-978307200 if row['modified_at'] is not None else None},'available':bool(row['available']), 'metadata':metadata,'thumbnailPath':row['thumbnail_path'],'analysisPath':row['analysis_path'],'pipelineVersion':row['pipeline_version'],'previewSource':row['preview_source'],'previewState':row['state'],'error':row['error']}
         assets = [asset_payload(id) for id in ranked]
         selected = request.get('selectedAssetID')
         selected_asset = asset_payload(selected) if selected in eligible else None
         source_clauses, source_args = constraints({'sourceIDs':recipe.get('sourceIDs',[])})
         where=' WHERE '+' AND '.join(source_clauses) if source_clauses else ''
         cameras = [r[0] for r in self.db.execute("SELECT DISTINCT json_extract(CAST(m.payload AS TEXT),'$.camera') FROM assets a JOIN metadata m ON m.asset_id=a.id"+where+(' AND ' if where else ' WHERE ')+"json_extract(CAST(m.payload AS TEXT),'$.camera') IS NOT NULL ORDER BY 1",source_args)]
-        return {'assets':assets,'selectedAsset':selected_asset,'resultCount':min(total,100) if searching and mode!='filename' else total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
+        return {'tagCoverage':self.tag_coverage(recipe),'tagVersion':self.tag_version,'assets':assets,'selectedAsset':selected_asset,'resultCount':min(total,100) if searching and mode!='filename' else total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
 
     def handle(self, request):
         if request.get('protocol') != PROTOCOL: raise ValueError('Unsupported worker protocol')
         op=request.get('op')
         if op=='query': return self.query(request)
         if op=='index': return self.index_batch(request)
+        if op=='tags': return {'processed':self.tag_batch(request.get('limit',128))}
         if op=='retry':
             with self.db: self.db.execute("DELETE FROM index_jobs WHERE stage='embedding' AND pipeline_version=? AND state='failed'",[self.version])
             return self.coverage({})

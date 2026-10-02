@@ -9,13 +9,19 @@ public struct PhotoResultGroup: Identifiable {
 /// Presentation only: every input identity belongs to exactly one bucket, in input rank order.
 public enum ResultGrouping {
     public static func groups(_ assets: [IndexedAsset], by grouping: Grouping, sources: [CatalogSource], ranked: Bool, sorting: PhotoSort) -> [PhotoResultGroup] {
-        if grouping == .none || grouping == .subject { return [PhotoResultGroup(id:"all",title:"",assets:assets)] }
+        if grouping == .none { return [PhotoResultGroup(id:"all",title:"",assets:assets)] }
         let names = Dictionary(uniqueKeysWithValues:sources.map { ($0.id,$0.name) })
         var buckets: [String:[IndexedAsset]] = [:], titles: [String:String] = [:], first: [String:Int] = [:]
         var unknown = Set<String>()
         for (rank,asset) in assets.enumerated() {
             let key: String, title: String
             switch grouping {
+            case .subject:
+                if let subject = asset.primarySubject {
+                    let suggested = asset.primarySubjectSuggested == true
+                    key = "subject:"+subject+(suggested ? ":suggested" : ":confirmed")
+                    title = subject.capitalized+(suggested ? " (suggested)" : "")
+                } else { key = "unknown:subject"; title = "Unknown subject"; unknown.insert(key) }
             case .folder:
                 let folder = (asset.asset.relativePath as NSString).deletingLastPathComponent
                 key = "folder:\(asset.asset.sourceID.uuidString):\(folder)"

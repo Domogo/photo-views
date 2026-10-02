@@ -7,19 +7,22 @@ from worker import Worker,MODEL_VERSION,reciprocal_rank_fusion
 def main():
     p=argparse.ArgumentParser();p.add_argument('--probe',type=Path,required=True);p.add_argument('--queries',type=Path,required=True);p.add_argument('--model',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
     a.output.mkdir(parents=True,exist_ok=False);db=sqlite3.connect(a.output/'catalog.sqlite')
-    db.executescript('''CREATE TABLE assets(id TEXT PRIMARY KEY,source_id TEXT,relative_path TEXT,file_id TEXT,byte_size INTEGER,modified_at REAL,available INTEGER);
+    db.executescript('''CREATE TABLE assets(id TEXT PRIMARY KEY,source_id TEXT,relative_path TEXT,file_id TEXT,byte_size INTEGER,modified_at REAL,available INTEGER,favorite INTEGER DEFAULT 0);
     CREATE TABLE metadata(asset_id TEXT,payload BLOB,capture_date REAL);
     CREATE TABLE derivatives(asset_id TEXT,thumbnail_path TEXT,analysis_path TEXT,pipeline_version TEXT,preview_source TEXT);
     CREATE TABLE index_jobs(id TEXT,source_id TEXT,asset_id TEXT,stage TEXT,state TEXT,error TEXT,pipeline_version TEXT,updated_at REAL,UNIQUE(asset_id,stage,pipeline_version));
     CREATE TABLE embeddings(asset_id TEXT,model_version TEXT,dimensions INTEGER,vector BLOB,PRIMARY KEY(asset_id,model_version));
-    CREATE TABLE tag_assignments(asset_id TEXT,tag TEXT,provenance TEXT,decision TEXT);''')
+    CREATE TABLE tag_assignments(asset_id TEXT,tag TEXT,provenance TEXT,decision TEXT,id TEXT,model_version TEXT,score REAL,threshold REAL,vocabulary_version TEXT);
+        CREATE TABLE tag_runs(asset_id TEXT PRIMARY KEY,vocabulary_version TEXT,model_version TEXT,input_fingerprint TEXT);
+        CREATE TABLE collections(id TEXT PRIMARY KEY,name TEXT);
+        CREATE TABLE collection_assets(collection_id TEXT,asset_id TEXT,PRIMARY KEY(collection_id,asset_id));''')
     records=json.loads((a.probe/'manifest.json').read_text());ids={r['id']:str(uuid.uuid5(uuid.NAMESPACE_URL,r['id'])).upper() for r in records}
     source=str(uuid.uuid4()).upper()
     for r in records:
         if r['status']!='preview-ready':continue
         id=ids[r['id']];meta=r['metadata'];exif=meta.get('{Exif}',{});camera=meta.get('{TIFF}',{}).get('Model')
         payload={'camera':camera,'captureDateText':exif.get('DateTimeOriginal'),'format':r['extension'].upper()}
-        db.execute('INSERT INTO assets VALUES(?,?,?,?,?,?,?)',[id,source,r['relativePath'],None,1,1,0])
+        db.execute('INSERT INTO assets(id,source_id,relative_path,file_id,byte_size,modified_at,available) VALUES(?,?,?,?,?,?,?)',[id,source,r['relativePath'],None,1,1,0])
         db.execute('INSERT INTO metadata VALUES(?,?,?)',[id,json.dumps(payload).encode(),1])
         path=str((a.probe/r['derivative']).resolve())
         db.execute('INSERT INTO derivatives VALUES(?,?,?,?,?)',[id,path,path,'imageio-m2-v1',r['previewSource']])

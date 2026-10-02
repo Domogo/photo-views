@@ -128,12 +128,22 @@ func index(_ coordinator: IndexCoordinator, catalog: URL, cache: URL, source: Ca
         assets = try store.indexedAssets()
         try check(assets.first { $0.filename == "renamed.jpg" }?.id == oriented.id,"Move lost stable asset identity")
         try check(assets.count == 3,"Move created an unnecessary duplicate")
+        try store.addManualTag("cars",to:oriented.id)
+        let corrected = try store.tags(for:oriented.id)[0]
+        try store.setTagDecision(corrected.id,decision:.rejected)
+        try store.addManualTag("animals",to:oriented.id)
+        try store.setFavorite(oriented.id,true)
+        let picks = try store.createCollection(name:"Preserved picks")
+        try store.setMembership(oriented.id,collection:picks.id,member:true)
         try fixture(moved,orientation:1)
         try index(IndexCoordinator(),catalog:db,cache:cache,source:source)
         let changed = try store.indexedAssets().first { $0.id == oriented.id }!
         let changedImage = CGImageSourceCreateWithURL(URL(fileURLWithPath:changed.analysisPath!) as CFURL,nil)!
         let changedProperties = CGImageSourceCopyPropertiesAtIndex(changedImage,0,nil)! as NSDictionary
         try check(changedProperties[kCGImagePropertyPixelWidth] as? Int == 480,"Changed content did not reindex")
+        try check(try store.tags(for:oriented.id).first(where:{ $0.tag == "cars" })?.decision == .rejected,"Reindex undid a rejection")
+        try check(try store.tags(for:oriented.id).first(where:{ $0.tag == "animals" })?.isConfirmed == true,"Reindex lost a confirmed correction")
+        try check(try store.isFavorite(oriented.id) && store.collectionIDs(for:oriented.id).contains(picks.id),"Reindex lost manual organization")
         // Recovery of a process-interrupted running job.
         try sql(db,"UPDATE index_jobs SET state='running' WHERE asset_id='\(oriented.id.uuidString)' AND stage='preview'; UPDATE source_scans SET state='indexing';")
         try index(IndexCoordinator(),catalog:db,cache:cache,source:source)
@@ -166,9 +176,9 @@ func index(_ coordinator: IndexCoordinator, catalog: URL, cache: URL, source: Ca
         try check(try ImagePipeline.hash(moved) == originalHash,"Eviction touched an original")
         // Reconstruct the M1 schema and prove its source/recipe records migrate intact.
         var recipe = ViewRecipe(); recipe.sourceIDs = [source.id]; try store.storeWorkspaceRecipe(recipe)
-        try sql(db,"DROP INDEX job_asset_stage_version; DROP TABLE derivatives; DROP TABLE source_scans; DROP INDEX asset_file_identity; ALTER TABLE assets DROP COLUMN scan_token; ALTER TABLE assets DROP COLUMN content_hash; ALTER TABLE metadata DROP COLUMN capture_date; PRAGMA user_version=1;")
+        try sql(db,"DROP INDEX tag_asset_name; DROP TABLE tag_runs; ALTER TABLE tag_assignments DROP COLUMN score; ALTER TABLE tag_assignments DROP COLUMN threshold; ALTER TABLE tag_assignments DROP COLUMN vocabulary_version; DROP INDEX job_asset_stage_version; DROP TABLE derivatives; DROP TABLE source_scans; DROP INDEX asset_file_identity; ALTER TABLE assets DROP COLUMN scan_token; ALTER TABLE assets DROP COLUMN content_hash; ALTER TABLE metadata DROP COLUMN capture_date; PRAGMA user_version=1;")
         let migrated = try Catalog(url:db)
-        try check(try migrated.version == 2 && migrated.sources().first?.id == source.id && migrated.workspaceRecipe() == recipe,"M1 migration lost records")
+        try check(try migrated.version == Catalog.schemaVersion && migrated.sources().first?.id == source.id && migrated.workspaceRecipe() == recipe,"M1 migration lost records")
         print("PASS: orientation, original metadata/integrity, failure isolation, hidden sidecars, pause/reopen/resume, unchanged reuse, stable moves, changed-file reindex, interrupted jobs and actual worker-process termination, missing/disconnected semantics, cache quota, and M1 migration.")
     }
     static func realFixtures(manifest: URL, sourceRoot: URL, output: URL) throws {

@@ -3,7 +3,7 @@ import Foundation
 public enum Grouping: String, CaseIterable, Codable, Identifiable {
     case none, folder, month, camera, subject
     public var id: String { rawValue }
-    public var title: String { self == .none ? "None" : rawValue.capitalized }
+    public var title: String { self == .none ? "None" : self == .subject ? "Primary subject" : rawValue.capitalized }
 }
 public enum PhotoSort: String, CaseIterable, Codable, Identifiable {
     case captureNewest, captureOldest, filename, relevance
@@ -30,6 +30,8 @@ public struct ExactFilters: Codable, Equatable {
     public init() {}
 }
 public struct ViewRecipe: Codable, Equatable {
+    public var collectionID: UUID?
+    public var favoritesOnly: Bool?
     public var sourceIDs: [UUID] = []
     public var search = ""
     public var searchMode: String?
@@ -125,6 +127,10 @@ public struct TagAssignmentRecord: Identifiable, Codable {
     public var provenance: TagProvenance
     public var decision: TagDecision
     public var modelVersion: String?
+    public var score: Double?
+    public var threshold: Double?
+    public var vocabularyVersion: String?
+    public var isConfirmed: Bool { decision != .rejected && (provenance == .manual || decision == .accepted) }
 }
 public struct IndexJobRecord: Identifiable, Codable {
     public var id: UUID
@@ -138,6 +144,9 @@ public struct IndexJobRecord: Identifiable, Codable {
 }
 
 public struct IndexedAsset: Identifiable, Codable {
+    public var favorite: Bool?
+    public var primarySubject: String?
+    public var primarySubjectSuggested: Bool?
     public var id: UUID { asset.id }
     public var asset: AssetRecord
     public var metadata: MetadataRecord?

@@ -88,6 +88,28 @@ final class CatalogTests {
         try expectEqual(try reopened.savedViews(),[updated])
         try reopened.storeSelectedView(nil); try expectEqual(try reopened.selectedView(),nil)
     }
+    func testOrganizationPersistenceAndExplicitDecisions() throws {
+        let url = root.appendingPathComponent("catalog.sqlite")
+        let store = try Catalog(url:url)
+        let folder = root.appendingPathComponent("Photos"); try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+        let source = try store.register(FolderAccess.source(for:folder)), asset = UUID()
+        let process = Process(); process.executableURL = URL(fileURLWithPath:"/usr/bin/sqlite3")
+        process.arguments = [url.path,"INSERT INTO assets(id,source_id,relative_path,byte_size) VALUES('\(asset.uuidString)','\(source.id.uuidString)','photo.jpg',1)"]
+        try process.run(); process.waitUntilExit(); try expectEqual(process.terminationStatus,0)
+        try store.addManualTag(" Cars ",to:asset)
+        let tag = try store.tags(for:asset)[0]; try expectTrue(tag.isConfirmed); try expectEqual(tag.tag,"cars")
+        try store.setTagDecision(tag.id,decision:.rejected); try expectTrue(try !store.tags(for:asset)[0].isConfirmed)
+        try store.addManualTag("Animals",to:asset,replacing:tag.id)
+        try expectEqual(try store.tags(for:asset).filter(\.isConfirmed).map(\.tag),["animals"])
+        try store.setFavorite(asset,true)
+        let collection = try store.createCollection(name:"Manual picks")
+        try store.setMembership(asset,collection:collection.id,member:true); try store.setMembership(asset,collection:collection.id,member:true)
+        let reopened = try Catalog(url:url)
+        try expectTrue(try reopened.isFavorite(asset)); try expectEqual(try reopened.collectionIDs(for:asset),[collection.id])
+        try expectEqual(try reopened.collections(),[collection]); try expectEqual(try reopened.tags(for:asset).filter(\.isConfirmed).map(\.tag),["animals"])
+        try reopened.setMembership(asset,collection:collection.id,member:false); try expectTrue(try reopened.collectionIDs(for:asset).isEmpty)
+        try expectThrows(try reopened.addManualTag(" ",to:asset)); try expectThrows(try reopened.createCollection(name:" "))
+    }
     func testBlankViewNameRejectedWithoutWriting() throws {
         let store = try Catalog(url:root.appendingPathComponent("catalog.sqlite"))
         try expectThrows(try store.save(SavedView(name:" \n ",recipe:ViewRecipe())))
@@ -126,7 +148,7 @@ enum CheckFailure: Error { case failed(String) }
 @main struct CatalogChecks {
     static func main() throws {
         let suite = CatalogTests()
-        for check in [suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
+        for check in [suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testOrganizationPersistenceAndExplicitDecisions, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
             try suite.setUpWithError()
             do { try check(); try suite.tearDownWithError() }
             catch { try? suite.tearDownWithError(); throw error }
