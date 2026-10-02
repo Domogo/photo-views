@@ -8,6 +8,33 @@ final class CatalogTests {
         try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
     }
     func tearDownWithError() throws { try FileManager.default.removeItem(at:root) }
+    func testQueryInterpretation() throws {
+        let now = Date(timeIntervalSince1970:1767227400) // 2026-01-01 00:30 UTC
+        func parse(_ input: String, zone: String = "UTC") -> QueryPlan { QueryInterpreter.interpret(input,cameras:["NIKON Z f","NIKON Z 6","Sony A7"],lenses:["NIKKOR Z 28mm f/2.8"],formats:["JPG","NEF"],now:now,timezone:TimeZone(identifier:zone)!) }
+        let plan = parse("cars at night camera:\"NIKON Z f\" folder:Japan group by month iso>=400 aperture<=2.8 shutter<=1/500 width>=4000 height<=5000 tag:cars format:nef")
+        try expectTrue(plan.canApply); try expectEqual(plan.visualIntent,"cars at night")
+        try expectEqual(plan.filters.camera,"NIKON Z f"); try expectEqual(plan.filters.folder,"Japan"); try expectEqual(plan.grouping,.month)
+        try expectEqual(plan.filters.minISO,400); try expectEqual(plan.filters.maxAperture,2.8); try expectEqual(plan.filters.maxShutterSeconds,0.002)
+        try expectEqual(plan.filters.minWidth,4000); try expectEqual(plan.filters.maxHeight,5000); try expectEqual(plan.filters.confirmedTags,["cars"]); try expectEqual(plan.filters.format,"NEF")
+        try expectEqual(parse("shot with \"Sony A7\" in folder \"Japan trip\" grouped by camera").filters.camera,"Sony A7")
+        try expectEqual(parse("lens:\"NIKKOR Z 28mm f/2.8\"").filters.lens,"NIKKOR Z 28mm f/2.8")
+        try expectEqual(parse("iso=100").filters.maxISO,100)
+        try expectTrue(!parse("camera:Nikon").canApply); try expectTrue(!parse("camera:Canon").canApply)
+        try expectTrue(!parse("camera:Sony camera:Nikon").canApply)
+        try expectTrue(!parse("group by nested").canApply); try expectTrue(!parse("format:RAW").canApply)
+        try expectTrue(!parse("location:Paris").canApply); try expectTrue(!parse("last month").canApply)
+        try expectTrue(!parse("iso>=oops").canApply); try expectTrue(!parse("on:2025-12-01 yesterday").canApply)
+        try expectTrue(!parse("iso>400").canApply); try expectTrue(!parse("iso>=800 iso<=400").canApply)
+        try expectTrue(!parse("shutter<=1/0").canApply); try expectTrue(!parse("on:2025-02-29").canApply)
+        try expectTrue(parse("on:2024-02-29").canApply)
+        try expectTrue(!parse("from:2025-12-01 through:2025-11-01").canApply)
+        let utc = parse("today"), la = parse("today",zone:"America/Los_Angeles")
+        try expectEqual(utc.referenceDay,"2026-01-01"); try expectEqual(la.referenceDay,"2025-12-31")
+        try expectTrue(utc.filters.fromDate != la.filters.fromDate)
+        try expectEqual(parse("dogs outdoors").visualIntent,"dogs outdoors")
+        try expectEqual(try JSONDecoder().decode(QueryPlan.self,from:JSONEncoder().encode(plan)),plan)
+        print("PASS: 22 agent-authored query cases; supported constraints/grouping, ambiguity/unsupported refusal, calendar/leap dates, timezone boundary and typed plan round-trip. Human plan agreement remains unmeasured.")
+    }
     func testSourceIdentityAndBookmarkSurviveReopening() throws {
         let folder = root.appendingPathComponent("Photos")
         try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
@@ -29,6 +56,7 @@ final class CatalogTests {
         var store: Catalog? = try Catalog(url:url)
         var recipe = ViewRecipe()
         recipe.sourceIDs = [UUID()]; recipe.search = "dogs outdoors"
+        recipe.filters.minAperture = 2.8; recipe.filters.maxShutterSeconds = 0.002; recipe.filters.minWidth = 4000; recipe.filters.maxHeight = 6000
         recipe.filters.camera = "Nikon"; recipe.filters.confirmedTags = ["dog"]
         recipe.filters.fromDate = Date(timeIntervalSince1970:1640995200)
         recipe.grouping = .month; recipe.sorting = .relevance
@@ -148,7 +176,7 @@ enum CheckFailure: Error { case failed(String) }
 @main struct CatalogChecks {
     static func main() throws {
         let suite = CatalogTests()
-        for check in [suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testOrganizationPersistenceAndExplicitDecisions, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
+        for check in [suite.testQueryInterpretation, suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testOrganizationPersistenceAndExplicitDecisions, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
             try suite.setUpWithError()
             do { try check(); try suite.tearDownWithError() }
             catch { try? suite.tearDownWithError(); throw error }

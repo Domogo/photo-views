@@ -31,6 +31,23 @@ class SearchChecks(unittest.TestCase):
     def tearDown(self):self.worker.db.close();self.tmp.cleanup()
     def query(self,recipe,mode='filename'):
         return self.worker.handle({'protocol':1,'op':'query','recipe':recipe,'mode':mode,'limit':1})
+    def test_complete_metadata_constraints(self):
+        payload={'lens':'Prime','iso':400,'aperture':2.8,'shutterSeconds':0.002,'width':6000,'height':4000,'format':'JPG','camera':'Nikon','captureDateText':'2025:11:06'}
+        self.worker.db.execute('UPDATE metadata SET payload=? WHERE asset_id=?',[json.dumps(payload).encode(),'a']);self.worker.db.commit()
+        filters={'lens':'Prime','minISO':400,'maxISO':400,'minAperture':2.8,'maxAperture':2.8,'minShutterSeconds':.002,'maxShutterSeconds':.002,'minWidth':6000,'maxWidth':6000,'minHeight':4000,'maxHeight':4000,'format':'JPG'}
+        self.assertEqual(self.query({'filters':filters})['resultCount'],1)
+        for key,value in [('minISO',401),('minAperture',2.9),('minShutterSeconds',.003),('minWidth',6001),('minHeight',4001)]:
+            self.assertEqual(self.query({'filters':{key:value}})['resultCount'],0)
+        for key in ('minISO','maxAperture','maxShutterSeconds','minWidth','maxHeight'):
+            for value in (-1,float('nan'),float('inf'),'1 OR 1=1',True):
+                with self.assertRaises(ValueError):self.query({'filters':{key:value}})
+        with self.assertRaises(ValueError):self.query({'filters':{'minWidth':6000,'maxWidth':2000}})
+        payload['width']='6000';payload['captureDateText']='2025:99:01';self.worker.db.execute('UPDATE metadata SET payload=? WHERE asset_id=?',[json.dumps(payload).encode(),'a']);self.worker.db.commit()
+        self.assertEqual(self.query({'filters':{'minWidth':1}})['resultCount'],0)
+        self.assertEqual(self.query({'filters':{'fromDay':'2025-11-06','toDay':'2025-11-06'}})['resultCount'],0)
+        self.assertEqual(self.query({})['lenses'],['Prime'])
+        self.assertEqual(self.query({'sourceIDs':['two']})['formats'],['ARW'])
+        self.assertEqual(self.query({'filters':{'lens':"' OR 1=1 --"}})['resultCount'],0)
     def test_literal_keyword_and_no_relaxation(self):
         r=self.query({'search':'car','sourceIDs':['one'],'filters':{'camera':'Nikon'}})
         self.assertEqual([a['asset']['id'] for a in r['assets']],['a']);self.assertEqual(r['resultCount'],1)

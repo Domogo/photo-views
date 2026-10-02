@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Versioned stdin/stdout worker. Local derivatives, SQLite and offline model only."""
 import argparse, hashlib, json, math, os, sqlite3, sys, time, uuid
+from datetime import datetime
 from pathlib import Path
 
 PROTOCOL = 1
@@ -24,12 +25,17 @@ def constraints(recipe):
     if f.get('folder'):
         clauses.append('instr(lower(folder_path(a.relative_path)),lower(?))>0'); values.append(f['folder'])
     # Filter calendar days from the camera's original wall clock, not the Mac timezone.
-    day = "replace(substr(json_extract(CAST(m.payload AS TEXT),'$.captureDateText'),1,10),':','-')"
+    day = "capture_day(json_extract(CAST(m.payload AS TEXT),'$.captureDateText'))"
     for key, op in [('fromDay','>='), ('toDay','<=')]:
         if f.get(key): clauses.append(day + op + '?'); values.append(f[key])
-    for key, op in [('minISO','>='), ('maxISO','<=')]:
-        if f.get(key) is not None:
-            clauses.append("json_extract(CAST(m.payload AS TEXT),'$.iso')"+op+'?'); values.append(f[key])
+    for field, keys in [('iso',('minISO','maxISO')),('aperture',('minAperture','maxAperture')),('shutterSeconds',('minShutterSeconds','maxShutterSeconds')),('width',('minWidth','maxWidth')),('height',('minHeight','maxHeight'))]:
+        if f.get(keys[0]) is not None and f.get(keys[1]) is not None and isinstance(f[keys[0]],(int,float)) and isinstance(f[keys[1]],(int,float)) and f[keys[0]]>f[keys[1]]:raise ValueError(field+' minimum exceeds maximum. Edit its limits in Filters.')
+        for key, op in zip(keys,('>=','<=')):
+            if f.get(key) is not None:
+                value=f[key]
+                if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or value<=0:raise ValueError('Metadata limits must be finite positive numbers.')
+                expression="json_extract(CAST(m.payload AS TEXT),'$."+field+"')"
+                clauses.append("typeof("+expression+") IN ('integer','real') AND "+expression+op+'?');values.append(value)
     for tag in f.get('confirmedTags', []):
         clauses.append("EXISTS(SELECT 1 FROM tag_assignments t WHERE t.asset_id=a.id AND t.tag=? AND t.decision!='rejected' AND (t.provenance='manual' OR t.decision='accepted'))"); values.append(tag)
     return clauses, values
@@ -48,6 +54,10 @@ class Worker:
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA foreign_keys=ON')
         self.db.create_function('folder_path',1,lambda p: str(Path(p).parent) if str(Path(p).parent) != '.' else '')
+        def capture_day(value):
+            try:return datetime.strptime(value[:10].replace(':','-'),'%Y-%m-%d').strftime('%Y-%m-%d')
+            except (ValueError,TypeError):return None
+        self.db.create_function('capture_day',1,capture_day)
         self.model_dir = Path(model)
         self.model = None
         self.version = MODEL_VERSION
@@ -243,7 +253,10 @@ class Worker:
         source_clauses, source_args = constraints({'sourceIDs':recipe.get('sourceIDs',[])})
         where=' WHERE '+' AND '.join(source_clauses) if source_clauses else ''
         cameras = [r[0] for r in self.db.execute("SELECT DISTINCT json_extract(CAST(m.payload AS TEXT),'$.camera') FROM assets a JOIN metadata m ON m.asset_id=a.id"+where+(' AND ' if where else ' WHERE ')+"json_extract(CAST(m.payload AS TEXT),'$.camera') IS NOT NULL ORDER BY 1",source_args)]
-        return {'tagCoverage':self.tag_coverage(recipe),'tagVersion':self.tag_version,'assets':assets,'selectedAsset':selected_asset,'resultCount':min(total,100) if searching and mode!='filename' else total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
+        facets={}
+        for field in ('lens','format'):
+            facets[field]=[r[0] for r in self.db.execute("SELECT DISTINCT json_extract(CAST(m.payload AS TEXT),'$."+field+"') FROM assets a JOIN metadata m ON m.asset_id=a.id"+where+(' AND ' if where else ' WHERE ')+"json_extract(CAST(m.payload AS TEXT),'$."+field+"') IS NOT NULL ORDER BY 1",source_args)]
+        return {'lenses':facets['lens'],'formats':facets['format'],'tagCoverage':self.tag_coverage(recipe),'tagVersion':self.tag_version,'assets':assets,'selectedAsset':selected_asset,'resultCount':min(total,100) if searching and mode!='filename' else total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
 
     def handle(self, request):
         if request.get('protocol') != PROTOCOL: raise ValueError('Unsupported worker protocol')

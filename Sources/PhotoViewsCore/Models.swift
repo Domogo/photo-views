@@ -26,6 +26,14 @@ public struct ExactFilters: Codable, Equatable {
     public var lens: String?
     public var minISO: Double?
     public var maxISO: Double?
+    public var minAperture: Double?
+    public var maxAperture: Double?
+    public var minShutterSeconds: Double?
+    public var maxShutterSeconds: Double?
+    public var minWidth: Double?
+    public var maxWidth: Double?
+    public var minHeight: Double?
+    public var maxHeight: Double?
     public var format: String?
     public init() {}
 }
