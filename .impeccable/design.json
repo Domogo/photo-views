@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T10:18:32.783495+00:00",
+  "title": "Design System: Photo Views",
+  "extensions": {
+    "nativePlatform": {
+      "frameworks": [
+        "SwiftUI",
+        "AppKit"
+      ],
+      "sourceFiles": [
+        "Sources/PhotoViewsApp/WorkspaceView.swift",
+        "Sources/PhotoViewsApp/PhotoViewsApp.swift"
+      ],
+      "colorSemantics": {
+        "canvas": "NSColor.textBackgroundColor",
+        "inspector": "NSColor.controlBackgroundColor",
+        "primaryText": "system default primary text",
+        "secondaryText": "foregroundStyle(.secondary)",
+        "selection": "Native List(selection:) appearance; no custom row backgrounds",
+        "primaryAction": "native borderedProminent button",
+        "separator": "native Divider"
+      },
+      "typographySemantics": {
+        "emptyStateTitle": "title2 semibold",
+        "saveSheetTitle": "title3 semibold",
+        "sectionHeading": "headline",
+        "recipeHeading": "subheadline semibold",
+        "sourceHeading": "body medium",
+        "supportingText": "caption",
+        "emptyStateSymbol": "system size 36pt, light"
+      },
+      "geometry": "Native controls own radii and focus/hover treatment; no custom radius tokens."
+    },
+    "nativeLayout": {
+      "units": "pt",
+      "window": {
+        "initial": [
+          1180,
+          760
+        ],
+        "minimumContentFrame": [
+          780,
+          520
+        ]
+      },
+      "sidebar": {
+        "minimum": 180,
+        "ideal": 220,
+        "maximum": 300
+      },
+      "inspector": {
+        "minimum": 220,
+        "ideal": 260,
+        "maximum": 340
+      },
+      "adaptation": "Native HSplitView with minimum 360pt central area. ViewThatFits(horizontal) stacks recipe controls as width decreases. Toolbar Sidebar and Inspector actions toggle supporting panes.",
+      "groupPickerWidth": 165,
+      "sortPickerWidth": 185,
+      "saveSheetWidth": 400,
+      "emptyExplanationMaxWidth": 380,
+      "compactEvidence": "Temporary fixed 780x520pt content frame yielded 780x572pt window including toolbar; normal minimum/default sizing restored after capture."
+    },
+    "verification": {
+      "milestone": "M1 native catalog shell",
+      "disposition": "ship",
+      "blockingFindings": [],
+      "captures": [
+        ".impeccable/review/m1-source-fixed.png",
+        ".impeccable/review/m1-compact.png",
+        ".impeccable/review/m1-dark.png"
+      ],
+      "renderedReview": "Repaired workspace shows sidebar, recipe controls and inspector. Fixed source and compact captures passed visual review; dark capture visually checked for readability.",
+      "resolvedDefect": "Replaced oversized NavigationSplitView child layout with explicit native HSplitView.",
+      "verifiedInteraction": [
+        "Native sidebar mouse selection",
+        "Native sidebar arrow-key selection"
+      ],
+      "followUpVerification": [
+        "Full Tab focus traversal",
+        "Increased contrast and all supported accent choices",
+        "Reduced motion",
+        "Manual divider/window resizing",
+        "Selected-photo continuity once photo workflows are implemented"
+      ],
+      "scope": "M1 source/settings shell only: indexing, photo grid, retrieval, preview and tag workflows are not implemented."
+    }
+  },
+  "components": [],
+  "nativeComponents": [
+    {
+      "name": "Workspace navigation",
+      "implementation": "Native HSplitView; List(selection:) with native mouse/arrow selection, source availability, saved views and Collections placeholder; toolbar pane visibility controls"
+    },
+    {
+      "name": "View recipe",
+      "implementation": "Disabled plain search field, Filters explanatory popover, labeled grouping and sorting Pickers, edited indicator and save/update actions"
+    },
+    {
+      "name": "Empty and failure states",
+      "implementation": "SF Symbol, native semibold title, supporting explanation and native actions; no-source, folder-added and catalog-failure states"
+    },
+    {
+      "name": "Source inspector",
+      "implementation": "ScrollView, LabeledContent, native Divider, source availability/path/actions and recipe summary"
+    },
+    {
+      "name": "Saving sheet",
+      "implementation": "Rounded-border name field, definition summary, native Cancel/Save View buttons with keyboard shortcuts and blank-name disabling"
+    }
+  ],
+  "narrative": {
+    "northStar": "Photo Workbench",
+    "overview": "Minimal, bespoke, intuitive native macOS photo workbench. Photographs dominate the intended browsing surface; native controls and precise hierarchy explain operations. M1 is a truthful local catalog shell awaiting indexing. Repaired full-size and compact native captures passed M1 visual review; dark readability was checked. Manual resizing, full Tab traversal, increased contrast and reduced motion retain verification follow-ups.",
+    "keyCharacteristics": [
+      "Photograph-led neutral surroundings",
+      "Familiar native interaction",
+      "Stable recipe controls",
+      "Readable availability and saved-definition state"
+    ],
+    "rules": [
+      {
+        "name": "The Photograph Rule",
+        "body": "Keep decorative color out of the image canvas; actual photographs carry the palette.",
+        "section": "colors"
+      },
+      {
+        "name": "The State Rule",
+        "body": "Color supplements meaningful state and is never its sole explanation.",
+        "section": "colors"
+      },
+      {
+        "name": "The Label Rule",
+        "body": "Core actions have readable labels; icons support meaning.",
+        "section": "typography"
+      },
+      {
+        "name": "The Stable Place Rule",
+        "body": "Keep primary controls consistent and preserve meaningful selection through organization changes where possible.",
+        "section": "layout"
+      }
+    ],
+    "dos": [
+      "Do give photographs the greatest visual area and keep surroundings neutral.",
+      "Do use native macOS controls, focus behavior, SF typography and system appearance.",
+      "Do make constraints and important states readable.",
+      "Do distinguish selection, keyboard focus, availability and provenance.",
+      "Do preserve context through regrouping, source changes and indexing where possible."
+    ],
+    "donts": [
+      "Don't replace labeled core actions with custom gestures or icon-only controls.",
+      "Don't add decorative gradients, glow, color washes or glass over imagery.",
+      "Don't surround every photo or metadata field with a card.",
+      "Don't hide uncertainty, offline availability or incomplete coverage.",
+      "Don't invent exact dynamic color, radius or SF metrics or claim visual sign-off from incomplete captures."
+    ]
+  }
+}

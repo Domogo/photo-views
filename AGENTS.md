@@ -10,6 +10,8 @@ The selected visual direction is Photo Workbench; main workspace brief is under 
 
 The user authorized a private GitHub repository on their personal profile and periodic pushes of verified logical chunks to main. Keep photo fixtures, model weights, catalogs, caches, credentials, generated probe reports, and local decision-server artifacts out of version control.
 
+GitHub is code storage only: no builds, hosting, CI/CD, GitHub Actions, or paid services. Build and check locally. Do not configure billable infrastructure.
+
 ## Personal repositories: no custom GitHub Actions
 
 Never create, install, enable, or re-enable custom GitHub Actions workflows in personal repositories (including Domogo and usevoro/voro) without an explicit request for that specific workflow. This includes CI, tests, builds, scheduled jobs, releases, and Copilot automation. Run checks locally. Do not enable paid GitHub automation or raise spending budgets without an explicit request.

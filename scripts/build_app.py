@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""Build a local developer .app with ad-hoc signing; no accounts, hosting, or paid services."""
+import argparse
+import plistlib
+import shutil
+import subprocess
+from pathlib import Path
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--release', action='store_true')
+parser.add_argument('--open', action='store_true')
+args = parser.parse_args()
+root = Path(__file__).resolve().parents[1]
+configuration = 'release' if args.release else 'debug'
+subprocess.run(['swift','build','-c',configuration],cwd=root,check=True)
+binary_dir = Path(subprocess.check_output(['swift','build','-c',configuration,'--show-bin-path'],cwd=root,text=True).strip())
+app = root / '.build' / 'app' / 'Photo Views.app'
+contents = app / 'Contents'
+(contents / 'MacOS').mkdir(parents=True,exist_ok=True)
+shutil.copy2(binary_dir / 'PhotoViews',contents / 'MacOS' / 'PhotoViews')
+info = {'CFBundleName':'Photo Views','CFBundleDisplayName':'Photo Views',
+        'CFBundleIdentifier':'com.domogo.photoviews','CFBundleExecutable':'PhotoViews',
+        'CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.1.0','CFBundleVersion':'1',
+        'LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True}
+(contents / 'Info.plist').write_bytes(plistlib.dumps(info))
+subprocess.run(['codesign','--force','--sign','-',str(app)],check=True)
+print(app)
+if args.open:
+    subprocess.run(['open',str(app)],check=True)
