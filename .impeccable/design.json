@@ -141,6 +141,17 @@
       "sectionGaps": false,
       "grouping": "ordering only",
       "layout": "one shortest-column placement over all results"
+    },
+    "matchThreshold": {
+      "textDefault": 0.2,
+      "referenceDefault": 0.75,
+      "range": [
+        0,
+        1
+      ],
+      "step": 0.01,
+      "paginationBatch": 500,
+      "calibratedProbability": false
     }
   },
   "components": [],

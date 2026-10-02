@@ -38,6 +38,7 @@ public struct ExactFilters: Codable, Equatable {
     public init() {}
 }
 public struct ViewRecipe: Codable, Equatable {
+    public var minimumSimilarity: Double?
     public var palette: PaletteSearch?
     public var collapsePairs: Bool?
     public var collectionID: UUID?

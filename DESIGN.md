@@ -82,7 +82,7 @@ Small native buttons name every active exact constraint and remove it individual
 
 ### Expanded filters and overall palette
 
-A bounded scrollable drawer contains named swatches, minimum-area slider, camera, folder, date and confirmed-tag controls, with additional metadata in a disclosure. The slider spans 5–100% in 5% steps; default minimum is 25%. The selected family must be the largest family in a coarse versioned local HSV-area histogram (`srgb-hsv-area-v1`) and meet that minimum. This means dominant family, not a majority of pixels or detection of colored objects. “Mostly blue” can request palette; “blue car” remains visual intent. Partial coverage stays visible, missing/failed palettes do not silently match, and retries are explicit. Cached palette data is versioned and invalidated with changed files.
+A bounded scrollable drawer starts with Minimum match score for visual mode (0–1 in 0.01 steps, text default 0.20/reference default 0.75; cosine similarity, not probability), followed by named swatches, minimum-area slider, camera, folder, date and confirmed-tag controls, with additional metadata in a disclosure. The slider spans 5–100% in 5% steps; default minimum is 25%. The selected family must be the largest family in a coarse versioned local HSV-area histogram (`srgb-hsv-area-v1`) and meet that minimum. This means dominant family, not a majority of pixels or detection of colored objects. “Mostly blue” can request palette; “blue car” remains visual intent. Partial coverage stays visible, missing/failed palettes do not silently match, and retries are explicit. Cached palette data is versioned and invalidated with changed files.
 
 ### Image-only masonry gallery
 
@@ -117,3 +117,5 @@ Save View and New Collection use rounded-border name fields, native buttons, Can
 - **Don't** equate a coarse dominant palette with object detection or calibrated color understanding.
 - **Don't** invent fixed dynamic colors, native radii or SF font metrics.
 - **Don't** claim revised visual/accessibility signoff from compilation or earlier milestone screenshots.
+
+Ranked search no longer caps results at 100. It filters cosine similarity before fusion and logical-photo collapse, then exposes loaded/total qualifying counts and extends by 500 near the scroll end. Defaults are provisional rather than calibrated certainty. Native check: birds at 0.19 expanded from 500/694 to 694/694 on scrolling.

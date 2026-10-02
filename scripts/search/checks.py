@@ -57,6 +57,25 @@ class SearchChecks(unittest.TestCase):
         self.assertTrue(all(not a['available'] for a in result['assets']))
         self.assertEqual(len(next(a for a in result['assets'] if a['photoID']=='p')['pairedAssetIDs']),2)
 
+    def test_similarity_cutoff_and_incremental_results(self):
+        for i in range(120):
+            id='extra'+str(i)
+            self.worker.db.execute("INSERT INTO assets SELECT ?,source_id,relative_path,file_id,byte_size,modified_at,available,favorite FROM assets WHERE id='b'",[id])
+            self.worker.db.execute("INSERT INTO embeddings SELECT ?,model_version,dimensions,vector FROM embeddings WHERE asset_id='b'",[id])
+            self.worker.db.execute("INSERT INTO metadata SELECT ?,payload,capture_date FROM metadata WHERE asset_id='b'",[id])
+            self.worker.db.execute("INSERT INTO index_jobs SELECT ?,source_id,?,stage,state,error,pipeline_version,updated_at FROM index_jobs WHERE asset_id='b'",[id,id])
+        self.worker.db.commit()
+        recipe={'referenceAssetID':'a','minimumSimilarity':0.8}
+        first=self.worker.query({'recipe':recipe,'mode':'visual','limit':50})
+        more=self.worker.query({'recipe':recipe,'mode':'visual','limit':150})
+        self.assertEqual(first['resultCount'],122)
+        self.assertEqual(len(first['assets']),50)
+        self.assertEqual(len(more['assets']),122)
+        self.assertEqual(first['assets'],more['assets'][:50])
+        self.assertNotIn('d',[a['asset']['id'] for a in more['assets']])
+        for invalid in [-1,1.1,float('nan'),True]:
+            with self.assertRaises(ValueError):self.worker.query({'recipe':dict(recipe,minimumSimilarity=invalid),'mode':'visual'})
+
     def test_complete_metadata_constraints(self):
         payload={'lens':'Prime','iso':400,'aperture':2.8,'shutterSeconds':0.002,'width':6000,'height':4000,'format':'JPG','camera':'Nikon','captureDateText':'2025:11:06'}
         self.worker.db.execute('UPDATE metadata SET payload=? WHERE asset_id=?',[json.dumps(payload).encode(),'a']);self.worker.db.commit()
@@ -141,7 +160,7 @@ class SearchChecks(unittest.TestCase):
             recipe={'referenceAssetID':'a',field:'old-version'}
             with self.assertRaisesRegex(ValueError,'different search model'):self.query(recipe)
             self.assertEqual(recipe[field],'old-version')
-        self.assertEqual(self.query({'referenceAssetID':'a','modelVersion':MODEL_VERSION,'rankingVersion':'rrf-k60-v1'})['resultCount'],3)
+        self.assertEqual(self.query({'referenceAssetID':'a','minimumSimilarity':0,'modelVersion':MODEL_VERSION,'rankingVersion':'rrf-k60-v1'})['resultCount'],3)
     def test_favorites_collections_are_exact_and_manual(self):
         self.worker.db.execute("UPDATE assets SET favorite=1 WHERE id='b'")
         self.worker.db.execute("INSERT INTO collection_assets VALUES('trip','a')");self.worker.db.commit()

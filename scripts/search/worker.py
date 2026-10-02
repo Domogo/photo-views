@@ -267,6 +267,10 @@ class Worker:
                 tag_ids = {r[0] for r in self.db.execute("SELECT asset_id FROM tag_assignments WHERE instr(lower(tag),lower(?))>0 AND decision!='rejected' AND (provenance IN ('imported','manual') OR decision='accepted' OR (provenance='suggested' AND decision='unconfirmed' AND model_version=? AND vocabulary_version=?))",[text,self.version,self.tag_version])}
                 matched += [(2,0,id) for id in tag_ids if id in by_id and not any(v[2]==id for v in matched)]
             return [r[2] for r in sorted(matched)]
+        threshold = recipe.get('minimumSimilarity')
+        if threshold is None: threshold = 0.75 if reference else 0.20
+        if isinstance(threshold,bool) or not isinstance(threshold,(float,int)) or not math.isfinite(threshold) or not 0 <= threshold <= 1:
+            raise ValueError('Minimum match score must be between 0 and 1.')
         searching = bool(text or reference or palette)
         if reference or (text and mode != 'filename'):
             self.load_model()
@@ -284,9 +288,9 @@ class Worker:
                 with self.torch.inference_mode(): query = self.model.encode_text(self.tokenizer([text]).to(self.device),normalize=True).cpu().numpy()[0]
             if vectors:
                 scores = self.np.stack(vectors) @ query
-                visual = [candidates[i] for i in sorted(range(len(candidates)),key=lambda i:(-float(scores[i]),candidates[i]))]
+                visual = [candidates[i] for i in sorted(range(len(candidates)),key=lambda i:(-float(scores[i]),candidates[i])) if float(scores[i]) >= threshold]
             else: visual = []
-            ranked = visual if reference else reciprocal_rank_fusion(visual,lexical())
+            ranked = visual if reference else reciprocal_rank_fusion(visual,[id for id in lexical() if id in set(visual)])
         elif text: ranked = lexical()
         else:
             sort = recipe.get('sorting','captureNewest')
@@ -310,9 +314,9 @@ class Worker:
                 if key not in seen: seen.add(key); collapsed.append(id)
             ranked = collapsed
         total = len(ranked)
-        limit = min(10000,max(1,request.get('limit',500)))
-        eligible = set(ranked[:100] if searching and mode!='filename' else ranked)
-        ranked = ranked[:min(limit,100) if searching and mode!='filename' else limit]
+        limit = min(100000,max(1,request.get('limit',500)))
+        eligible = set(ranked)
+        ranked = ranked[:limit]
         eligible_members = {id for id in matching if id in eligible or (collapse and associations.get(id) in {associations.get(r) for r in eligible if r in associations})}
         subjects=self.subjects(eligible_members)
         def asset_payload(id):
@@ -327,7 +331,7 @@ class Worker:
         facets={}
         for field in ('lens','format'):
             facets[field]=[r[0] for r in self.db.execute("SELECT DISTINCT json_extract(CAST(m.payload AS TEXT),'$."+field+"') FROM assets a JOIN metadata m ON m.asset_id=a.id"+where+(' AND ' if where else ' WHERE ')+"json_extract(CAST(m.payload AS TEXT),'$."+field+"') IS NOT NULL ORDER BY 1",source_args)]
-        return {'paletteCoverage':palette_coverage,'lenses':facets['lens'],'formats':facets['format'],'tagCoverage':self.tag_coverage(recipe),'tagVersion':self.tag_version,'assets':assets,'selectedAsset':selected_asset,'resultCount':min(total,100) if searching and mode!='filename' else total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
+        return {'paletteCoverage':palette_coverage,'lenses':facets['lens'],'formats':facets['format'],'tagCoverage':self.tag_coverage(recipe),'tagVersion':self.tag_version,'assets':assets,'selectedAsset':selected_asset,'resultCount':total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
 
     def handle(self, request):
         if request.get('protocol') != PROTOCOL: raise ValueError('Unsupported worker protocol')

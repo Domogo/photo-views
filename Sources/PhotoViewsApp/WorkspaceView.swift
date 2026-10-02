@@ -249,6 +249,16 @@ struct WorkspaceView: View {
     private var filterControls: some View {
         VStack(alignment:.leading,spacing:16) {
             HStack { Text("Filter photos").font(.headline); Spacer(); Button("Done") { filtersVisible = false } }
+            if model.searchMode == "visual" {
+                VStack(alignment:.leading,spacing:6) {
+                    HStack {
+                        Text("Minimum match score")
+                        Slider(value:Binding(get:{ model.recipe.minimumSimilarity ?? (model.recipe.referenceAssetID == nil ? 0.20 : 0.75) },set:{ model.recipe.minimumSimilarity = $0 }),in:0...1,step:0.01)
+                        Text(String(format:"%.2f",model.recipe.minimumSimilarity ?? (model.recipe.referenceAssetID == nil ? 0.20 : 0.75))).monospacedDigit().frame(width:40)
+                    }
+                    Text("Higher scores exclude weaker matches. Similarity is not a confidence percentage.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
             VStack(alignment:.leading,spacing:8) {
                 Text("Overall palette").font(.subheadline)
                 LazyVGrid(columns:[GridItem(.adaptive(minimum:70))],spacing:6) {
@@ -450,7 +460,7 @@ struct WorkspaceView: View {
                 } label: {
                     HStack(spacing:8) {
                         if model.indexing || model.visualIndexing { ProgressView().controlSize(.small) }
-                        Text(model.queryPlan != nil ? "Search not run" : model.isRankedSearch ? "\(model.assets.count) ranked photos" : "\(model.resultCount) photos")
+                        Text(model.queryPlan != nil ? "Search not run" : model.isRankedSearch ? "\(model.assets.count) of \(model.resultCount) matching photos" : "\(model.resultCount) photos")
                         Spacer()
                         Text("Indexed \(model.visualCoverage.embedded) / \(model.visualCoverage.total)")
                             .font(.caption).foregroundStyle(.secondary).monospacedDigit()
