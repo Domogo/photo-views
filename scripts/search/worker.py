@@ -3,6 +3,7 @@
 import argparse, hashlib, json, math, os, sqlite3, sys, time, uuid
 from datetime import datetime
 from pathlib import Path
+from palette import VERSION as PALETTE_VERSION, COLORS as PALETTE_COLORS, histogram
 
 PROTOCOL = 1
 REVISION = '1a25a446712ba5ee05982a381eed697ef9b435cf'
@@ -65,6 +66,46 @@ class Worker:
         self.tag_config=json.loads(config_path.read_text())
         self.tag_version=self.tag_config['version']+':'+hashlib.sha256(config_path.read_bytes()).hexdigest()[:12]
         self.tag_vectors=None
+
+    @staticmethod
+    def palette_fingerprint(row):
+        return json.dumps([row['modified_at'],row['byte_size'],row['pipeline_version']],separators=(',',':'))
+
+    def palette_batch(self, limit=32, retry=False):
+        if retry:
+            with self.db: self.db.execute('DELETE FROM palettes WHERE payload IS NULL')
+        rows=self.db.execute("""SELECT a.id,a.modified_at,a.byte_size,d.pipeline_version,d.thumbnail_path,d.analysis_path,
+            p.version,p.fingerprint FROM assets a JOIN derivatives d ON d.asset_id=a.id
+            LEFT JOIN palettes p ON p.asset_id=a.id ORDER BY a.id""").fetchall()
+        pending=[r for r in rows if r['version']!=PALETTE_VERSION or r['fingerprint']!=self.palette_fingerprint(r)]
+        processed=0
+        for row in pending[:min(128,max(1,limit))]:
+            fingerprint=self.palette_fingerprint(row); payload=None; error=None
+            try:
+                path=next((Path(p) for p in (row['analysis_path'],row['thumbnail_path']) if p and Path(p).is_file()),None)
+                if path is None: raise ValueError('Cached preview missing. Rebuild the preview, then retry palette analysis.')
+                payload=json.dumps(histogram(path),separators=(',',':'))
+            except Exception as failure: error=str(failure)[:500]
+            # A concurrent changed-file scan must not commit stale palette data.
+            with self.db:
+                current=self.db.execute('SELECT a.modified_at,a.byte_size,d.pipeline_version FROM assets a JOIN derivatives d ON d.asset_id=a.id WHERE a.id=?',[row['id']]).fetchone()
+                if current is None or self.palette_fingerprint(current)!=fingerprint: continue
+                self.db.execute('INSERT INTO palettes VALUES(?,?,?,?,?) ON CONFLICT(asset_id) DO UPDATE SET version=excluded.version,fingerprint=excluded.fingerprint,payload=excluded.payload,error=excluded.error',[row['id'],PALETTE_VERSION,fingerprint,payload,error])
+            processed+=1
+        return {'processed':processed,'remaining':max(0,len(pending)-processed)}
+
+    def palette_coverage(self, recipe):
+        clauses,args=constraints(recipe)
+        rows=self.db.execute("""SELECT a.modified_at,a.byte_size,d.pipeline_version,p.version AS palette_version,
+            p.fingerprint AS palette_fingerprint,p.payload AS palette_payload FROM assets a LEFT JOIN metadata m ON m.asset_id=a.id
+            LEFT JOIN derivatives d ON d.asset_id=a.id LEFT JOIN palettes p ON p.asset_id=a.id"""+(' WHERE '+' AND '.join(clauses) if clauses else ''),args).fetchall()
+        prepared=failed=0
+        for row in rows:
+            valid=row['palette_version']==PALETTE_VERSION and row['palette_fingerprint']==self.palette_fingerprint(row)
+            if valid:
+                if row['palette_payload'] is not None: prepared+=1
+                else: failed+=1
+        return {'total':len(rows),'prepared':prepared,'failed':failed}
 
     def load_model(self):
         if self.model is not None: return
@@ -195,9 +236,22 @@ class Worker:
         clauses.append("j.state IN ('complete','failed')")
         rows = self.db.execute("""SELECT a.id,a.source_id,a.relative_path,a.file_id,a.byte_size,a.modified_at,a.available,a.favorite,
           m.payload,m.capture_date,d.thumbnail_path,d.analysis_path,d.pipeline_version,d.preview_source,j.state,j.error,
-          e.vector FROM assets a LEFT JOIN metadata m ON m.asset_id=a.id LEFT JOIN derivatives d ON d.asset_id=a.id
+          e.vector,p.version AS palette_version,p.fingerprint AS palette_fingerprint,p.payload AS palette_payload FROM assets a LEFT JOIN palettes p ON p.asset_id=a.id LEFT JOIN metadata m ON m.asset_id=a.id LEFT JOIN derivatives d ON d.asset_id=a.id
           LEFT JOIN index_jobs j ON j.asset_id=a.id AND j.stage='preview' AND j.pipeline_version='imageio-m2-v1'
           LEFT JOIN embeddings e ON e.asset_id=a.id AND e.model_version=? WHERE """ + ' AND '.join(clauses),[self.version]+args).fetchall()
+        palette = recipe.get('palette')
+        if palette:
+            if palette.get('version')!=PALETTE_VERSION: raise ValueError('This view uses a different palette version. Choose the color again and update the saved view explicitly.')
+            fraction=palette.get('minimumFraction',.25)
+            if palette.get('color') not in PALETTE_COLORS or isinstance(fraction,bool) or not isinstance(fraction,(float,int)) or not math.isfinite(fraction) or not 0 < fraction <= 1: raise ValueError('Choose a supported palette color and a coverage between 1% and 100%.')
+        palette_coverage=self.palette_coverage(recipe)
+        palette_scores={}
+        if palette:
+            for row in rows:
+                if row['palette_version']!=PALETTE_VERSION or row['palette_fingerprint']!=self.palette_fingerprint(row) or row['palette_payload'] is None: continue
+                areas=json.loads(row['palette_payload']); share=areas.get(palette['color'],0)
+                if share>=fraction and share>=max(areas.values(),default=0): palette_scores[row['id']]=share
+            rows=[row for row in rows if row['id'] in palette_scores]
         text = recipe.get('search','').strip(); mode = request.get('mode','visual'); reference = recipe.get('referenceAssetID')
         if (reference or (text and mode != 'filename')) and (
             recipe.get('modelVersion') not in (None, self.version) or recipe.get('rankingVersion') not in (None, RANKING_VERSION)):
@@ -213,7 +267,7 @@ class Worker:
                 tag_ids = {r[0] for r in self.db.execute("SELECT asset_id FROM tag_assignments WHERE instr(lower(tag),lower(?))>0 AND decision!='rejected' AND (provenance IN ('imported','manual') OR decision='accepted' OR (provenance='suggested' AND decision='unconfirmed' AND model_version=? AND vocabulary_version=?))",[text,self.version,self.tag_version])}
                 matched += [(2,0,id) for id in tag_ids if id in by_id and not any(v[2]==id for v in matched)]
             return [r[2] for r in sorted(matched)]
-        searching = bool(text or reference)
+        searching = bool(text or reference or palette)
         if reference or (text and mode != 'filename'):
             self.load_model()
             candidates = []
@@ -238,6 +292,9 @@ class Worker:
             sort = recipe.get('sorting','captureNewest')
             if sort=='filename': ranked = sorted(by_id,key=lambda id:(by_id[id]['relative_path'].casefold(),id))
             else: ranked = sorted(by_id,key=lambda id:((by_id[id]['capture_date'] or by_id[id]['modified_at'] or 0),id),reverse=sort!='captureOldest')
+        if palette:
+            palette_ranked=sorted((id for id in ranked if id in palette_scores),key=lambda id:(-palette_scores[id],id))
+            ranked=reciprocal_rank_fusion(ranked,palette_ranked) if text or reference else palette_ranked
         # Semantic searches return nearest neighbors, not guaranteed matches. No probability claims.
         # Constraints apply to each asset before logical-photo collapsing. The first ranked matching
         # member represents the photo; no sibling can bypass exact filters or collection membership.
@@ -270,13 +327,15 @@ class Worker:
         facets={}
         for field in ('lens','format'):
             facets[field]=[r[0] for r in self.db.execute("SELECT DISTINCT json_extract(CAST(m.payload AS TEXT),'$."+field+"') FROM assets a JOIN metadata m ON m.asset_id=a.id"+where+(' AND ' if where else ' WHERE ')+"json_extract(CAST(m.payload AS TEXT),'$."+field+"') IS NOT NULL ORDER BY 1",source_args)]
-        return {'lenses':facets['lens'],'formats':facets['format'],'tagCoverage':self.tag_coverage(recipe),'tagVersion':self.tag_version,'assets':assets,'selectedAsset':selected_asset,'resultCount':min(total,100) if searching and mode!='filename' else total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
+        return {'paletteCoverage':palette_coverage,'lenses':facets['lens'],'formats':facets['format'],'tagCoverage':self.tag_coverage(recipe),'tagVersion':self.tag_version,'assets':assets,'selectedAsset':selected_asset,'resultCount':min(total,100) if searching and mode!='filename' else total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
 
     def handle(self, request):
         if request.get('protocol') != PROTOCOL: raise ValueError('Unsupported worker protocol')
         op=request.get('op')
         if op=='query': return self.query(request)
-        if op=='index': return self.index_batch(request)
+        if op=='index':
+            result=self.index_batch(request); self.palette_batch(32); return result
+        if op=='palettes': return self.palette_batch(request.get('limit',32),request.get('retry',False))
         if op=='tags': return {'processed':self.tag_batch(request.get('limit',128))}
         if op=='retry':
             with self.db: self.db.execute("DELETE FROM index_jobs WHERE stage='embedding' AND pipeline_version=? AND state='failed'",[self.version])

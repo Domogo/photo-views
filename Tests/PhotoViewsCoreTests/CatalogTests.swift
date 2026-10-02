@@ -69,11 +69,20 @@ final class CatalogTests {
         try expectEqual(restored.first?.id,first.id)
         try expectEqual(try FolderAccess.resolve(restored[0]).url.standardizedFileURL.path,folder.standardizedFileURL.path)
     }
+    func testPaletteLanguage() throws {
+        let result = PaletteSearch.extract(from:"water mostly blue camera:Nikon")
+        try expectEqual(result.intent,"water camera:Nikon")
+        try expectEqual(result.palette?.color,"blue")
+        try expectEqual(PaletteSearch.extract(from:"red car").palette,nil)
+        try expectEqual(PaletteSearch.extract(from:"mostly blue mostly red").ambiguous,true)
+        let legacy = try JSONDecoder().decode(ViewRecipe.self,from:Data(#"{"sourceIDs":[],"search":"","filters":{"confirmedTags":[]},"grouping":"none","sorting":"captureNewest"}"#.utf8))
+        try expectEqual(legacy.palette,nil)
+    }
     func testViewAndWorkspaceRecipeRoundTrip() throws {
         let url = root.appendingPathComponent("catalog.sqlite")
         var store: Catalog? = try Catalog(url:url)
         var recipe = ViewRecipe()
-        recipe.sourceIDs = [UUID()]; recipe.search = "dogs outdoors"
+        recipe.sourceIDs = [UUID()]; recipe.search = "dogs outdoors"; recipe.palette = PaletteSearch(color:"blue",minimumFraction:0.4)
         recipe.filters.minAperture = 2.8; recipe.filters.maxShutterSeconds = 0.002; recipe.filters.minWidth = 4000; recipe.filters.maxHeight = 6000
         recipe.filters.camera = "Nikon"; recipe.filters.confirmedTags = ["dog"]
         recipe.filters.fromDate = Date(timeIntervalSince1970:1640995200)
@@ -194,7 +203,7 @@ enum CheckFailure: Error { case failed(String) }
 @main struct CatalogChecks {
     static func main() throws {
         let suite = CatalogTests()
-        for check in [suite.testHumanApprovedQueryPlans, suite.testQueryInterpretation, suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testOrganizationPersistenceAndExplicitDecisions, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
+        for check in [suite.testPaletteLanguage, suite.testHumanApprovedQueryPlans, suite.testQueryInterpretation, suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testOrganizationPersistenceAndExplicitDecisions, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
             try suite.setUpWithError()
             do { try check(); try suite.tearDownWithError() }
             catch { try? suite.tearDownWithError(); throw error }

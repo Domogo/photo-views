@@ -60,6 +60,7 @@ extension Catalog {
                 try run("DELETE FROM metadata WHERE asset_id=?",[id.uuidString])
                 try run("DELETE FROM derivatives WHERE asset_id=?",[id.uuidString])
                 try run("DELETE FROM embeddings WHERE asset_id=?",[id.uuidString])
+                try run("DELETE FROM palettes WHERE asset_id=?",[id.uuidString])
                 try run("DELETE FROM tag_runs WHERE asset_id=?",[id.uuidString])
                 try run("DELETE FROM tag_assignments WHERE asset_id=? AND provenance='suggested' AND decision='unconfirmed'",[id.uuidString])
                 try run("UPDATE assets SET content_hash=NULL WHERE id=?",[id.uuidString])

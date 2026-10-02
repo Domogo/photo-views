@@ -7,6 +7,7 @@ public struct QueryPlan: Codable, Equatable {
     public var visualIntent: String
     public var filters: ExactFilters
     public var grouping: Grouping?
+    public var palette: PaletteSearch?
     public var ambiguities: [String] = []
     public var unsupported: [String] = []
     public var referenceDay: String

@@ -16,6 +16,7 @@ class SearchChecks(unittest.TestCase):
         CREATE TABLE embeddings(asset_id TEXT,model_version TEXT,dimensions INTEGER,vector BLOB,PRIMARY KEY(asset_id,model_version));
         CREATE TABLE tag_assignments(asset_id TEXT,tag TEXT,provenance TEXT,decision TEXT,id TEXT,model_version TEXT,score REAL,threshold REAL,vocabulary_version TEXT);
         CREATE TABLE tag_runs(asset_id TEXT PRIMARY KEY,vocabulary_version TEXT,model_version TEXT,input_fingerprint TEXT);
+        CREATE TABLE palettes(asset_id TEXT PRIMARY KEY,version TEXT,fingerprint TEXT,payload TEXT,error TEXT);
         CREATE TABLE photos(id TEXT PRIMARY KEY,primary_asset_id TEXT);
         CREATE TABLE photo_assets(photo_id TEXT,asset_id TEXT UNIQUE);
         CREATE TABLE collections(id TEXT PRIMARY KEY,name TEXT);
@@ -184,6 +185,44 @@ class SearchChecks(unittest.TestCase):
         self.assertEqual(self.worker.db.execute("SELECT provenance FROM tag_assignments WHERE id='manual'").fetchone()[0],'manual')
         self.worker.tag_version='next-vocabulary';self.worker.tag_batch()
         self.assertEqual(self.worker.db.execute("SELECT decision FROM tag_assignments WHERE id='reject'").fetchone()[0],'rejected')
+    def test_palette_area_cache_and_constraints(self):
+        from PIL import Image
+        from palette import VERSION, histogram
+        blue=Path(self.tmp.name)/'blue.png'; red=Path(self.tmp.name)/'red.png'
+        Image.new('RGB',(80,40),(0,0,255)).save(blue)
+        image=Image.new('RGB',(80,40),(255,0,0)); image.paste((0,0,255),(0,0,20,40)); image.save(red)
+        self.assertEqual(histogram(blue)['blue'],1)
+        for color,rgb in [('black',(0,0,0)),('white',(255,255,255)),('gray',(120,120,120)),('brown',(120,60,20))]:
+            sample=Path(self.tmp.name)/(color+'.png');Image.new('RGB',(8,8),rgb).save(sample)
+            self.assertEqual(histogram(sample)[color],1)
+        self.assertAlmostEqual(histogram(red)['blue'],.25,places=2)
+        for id,path in [('a',blue),('b',red),('c',red),('d',red)]: self.worker.db.execute('UPDATE derivatives SET analysis_path=? WHERE asset_id=?',[str(path),id])
+        self.worker.db.commit()
+        self.assertEqual(self.worker.palette_batch(limit=2)['processed'],2)
+        self.assertEqual(self.worker.palette_batch(limit=2)['processed'],2)
+        self.assertEqual(self.worker.palette_batch()['processed'],0)
+        self.worker.load_model=lambda: (_ for _ in ()).throw(AssertionError('Palette-only search must not load the visual model'))
+        palette={'color':'blue','minimumFraction':.5,'version':VERSION}
+        result=self.worker.query({'recipe':{'palette':palette},'mode':'visual'})
+        self.assertEqual([a['asset']['id'] for a in result['assets']],['a'])
+        self.assertEqual(result['paletteCoverage']['prepared'],4)
+        # Cached palettes work after preview eviction and unavailable originals.
+        blue.unlink(); red.unlink()
+        self.assertEqual(self.worker.palette_batch()['processed'],0)
+        self.assertEqual(self.worker.query({'recipe':{'palette':palette}})['resultCount'],1)
+        self.assertEqual(self.worker.query({'recipe':{'palette':palette,'sourceIDs':['two']}})['resultCount'],0)
+        self.assertEqual(self.worker.query({'recipe':{'palette':palette,'search':'lake'},'mode':'filename'})['resultCount'],0)
+        # Changed identity invalidates coverage before a new histogram is prepared.
+        self.worker.db.execute("UPDATE assets SET modified_at=124 WHERE id='a'");self.worker.db.commit()
+        self.assertEqual(self.worker.query({'recipe':{'palette':palette}})['resultCount'],0)
+        self.worker.palette_batch()
+        self.assertEqual(self.worker.query({'recipe':{}})['paletteCoverage']['failed'],1)
+        Image.new('RGB',(10,10),(0,0,255)).save(blue)
+        self.worker.palette_batch(retry=True)
+        self.assertEqual(self.worker.query({'recipe':{'palette':palette}})['resultCount'],1)
+        with self.assertRaises(ValueError): self.worker.query({'recipe':{'palette':dict(palette,minimumFraction=float('nan'))}})
+        with self.assertRaises(ValueError): self.worker.query({'recipe':{'palette':dict(palette,version='future')}})
+
     def test_invalid_protocol(self):
         with self.assertRaises(ValueError):self.worker.handle({'protocol':999,'op':'query'})
 
