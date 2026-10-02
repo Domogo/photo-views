@@ -42,12 +42,12 @@ Milestones describe working increments, not calendar commitments. Hackathon dura
 
 - Enumerate selected folders recursively; metadata and preview stages precede embeddings.
 - Implement the validated RAW/standard-image preview pipeline and metadata extraction from originals; retain pipeline/version provenance.
-- Persist per-stage jobs, bounded concurrency, pause/resume, restart recovery, incremental file-change detection, and individual failure reporting.
+- Persist per-stage jobs, bounded concurrency, pause/resume, restart recovery, incremental file-change detection, and individual failure reporting. Checkpoint completed expensive stages so interrupted scans reuse them; detect moved files without treating a disconnected drive as deletion.
 - Generate local thumbnails and analysis derivatives; apply cache limits without tying originals to cache lifetimes.
 - Connect a lazy photo grid and inspector to catalog results; support keyboard selection, Space preview, and Reveal in Finder.
 - Establish disconnected-source semantics now: an unavailable volume is not deletion. Full reconnect reconciliation follows in M7.
 
-**Done when:** an actual mixed-format folder produces correctly oriented browseable previews; metadata is inspectable; corrupt files do not stop the job; pause/relaunch/resume works; changed files reindex appropriately; originals remain unchanged.
+**Done when:** an actual mixed-format folder produces correctly oriented browseable previews; metadata is inspectable; corrupt files do not stop the job; pause/relaunch/resume works; changed files reindex appropriately; originals remain unchanged. Include quit/relaunch during scanning, moved files, unchanged-file reuse, and disconnected-drive fixtures in local checks.
 
 **Depends on:** M0 decoder decision and M1 catalog/source foundation.
 
