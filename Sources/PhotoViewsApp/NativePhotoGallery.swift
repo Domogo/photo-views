@@ -4,8 +4,6 @@ import ImageIO
 import PhotoViewsCore
 
 private let galleryItemID = NSUserInterfaceItemIdentifier("Photo")
-private let galleryHeaderID = NSUserInterfaceItemIdentifier("Group")
-private let headerKind = "PhotoGroupHeader"
 
 private enum GalleryThumbnails {
     static let cache: NSCache<NSString,NSImage> = {
@@ -53,51 +51,35 @@ private final class GalleryCell: NSCollectionViewItem {
         operation = work; GalleryThumbnails.queue.addOperation(work)
     }
 }
-private final class GalleryHeader: NSView {
-    let label = NSTextField(labelWithString:"")
-    override init(frame: NSRect) {
-        super.init(frame:frame); label.font = .systemFont(ofSize:NSFont.systemFontSize,weight:.semibold)
-        label.lineBreakMode = .byTruncatingMiddle; label.translatesAutoresizingMaskIntoConstraints = false; addSubview(label)
-        NSLayoutConstraint.activate([label.leadingAnchor.constraint(equalTo:leadingAnchor),label.trailingAnchor.constraint(equalTo:trailingAnchor),label.centerYAnchor.constraint(equalTo:centerYAnchor)])
-    }
-    required init?(coder: NSCoder) { fatalError() }
-}
 private final class MasonryCollectionLayout: NSCollectionViewLayout {
     var groups: [PhotoResultGroup] = []
     private(set) var items: [IndexPath:NSCollectionViewLayoutAttributes] = [:]
-    private var headers: [IndexPath:NSCollectionViewLayoutAttributes] = [:]
     private var size = NSSize.zero
     override var collectionViewContentSize: NSSize { size }
     override func shouldInvalidateLayout(forBoundsChange newBounds: NSRect) -> Bool { abs(newBounds.width-size.width)>0.5 }
     override func prepare() {
         guard let collectionView else { return }
         let width = collectionView.enclosingScrollView?.contentView.bounds.width ?? collectionView.bounds.width
-        items.removeAll(keepingCapacity:true); headers.removeAll(keepingCapacity:true)
-        var y = 12.0
-        for (section,group) in groups.enumerated() {
-            if !group.title.isEmpty {
-                let path = IndexPath(item:0,section:section)
-                let attr = NSCollectionViewLayoutAttributes(forSupplementaryViewOfKind:headerKind,with:path)
-                attr.frame = CGRect(x:12,y:y,width:max(1,width-24),height:24); headers[path] = attr; y += 32
-            }
-            let aspects = group.assets.map { asset -> Double in
-                guard let w = asset.metadata?.width, let h = asset.metadata?.height, w > 0, h > 0 else { return 1 }
-                return [5,6,7,8].contains(asset.metadata?.orientation ?? 1) ? Double(h)/Double(w) : Double(w)/Double(h)
-            }
-            let result = GalleryGeometry.frames(aspects:aspects,width:width,y:y)
-            for (item,frame) in result.frames.enumerated() {
-                let path = IndexPath(item:item,section:section), attr = NSCollectionViewLayoutAttributes(forItemWith:path)
-                attr.frame = frame; items[path] = attr
-            }
-            y = result.height+20
+        items.removeAll(keepingCapacity:true)
+        let assets = groups.flatMap(\.assets)
+        let aspects = assets.map { asset -> Double in
+            guard let w = asset.metadata?.width, let h = asset.metadata?.height, w > 0, h > 0 else { return 1 }
+            return [5,6,7,8].contains(asset.metadata?.orientation ?? 1) ? Double(h)/Double(w) : Double(w)/Double(h)
         }
-        size = NSSize(width:width,height:max(y,collectionView.enclosingScrollView?.contentView.bounds.height ?? 1))
+        let result = GalleryGeometry.frames(aspects:aspects,width:width,y:12)
+        var offset = 0
+        for (section,group) in groups.enumerated() {
+            for item in group.assets.indices {
+                let path = IndexPath(item:item,section:section), attr = NSCollectionViewLayoutAttributes(forItemWith:path)
+                attr.frame = result.frames[offset]; items[path] = attr; offset += 1
+            }
+        }
+        size = NSSize(width:width,height:max(result.height+12,collectionView.enclosingScrollView?.contentView.bounds.height ?? 1))
     }
     override func layoutAttributesForElements(in rect: NSRect) -> [NSCollectionViewLayoutAttributes] {
-        Array(items.values.filter { $0.frame.intersects(rect) })+Array(headers.values.filter { $0.frame.intersects(rect) })
+        Array(items.values.filter { $0.frame.intersects(rect) })
     }
     override func layoutAttributesForItem(at indexPath: IndexPath) -> NSCollectionViewLayoutAttributes? { items[indexPath] }
-    override func layoutAttributesForSupplementaryView(ofKind elementKind: String, at indexPath: IndexPath) -> NSCollectionViewLayoutAttributes? { headers[indexPath] }
 }
 private final class GalleryCollection: NSCollectionView {
     var preview: (() -> Void)?
@@ -137,7 +119,6 @@ struct NativePhotoGallery: NSViewRepresentable {
         let collection = GalleryCollection(); collection.isSelectable = true; collection.allowsMultipleSelection = false
         collection.backgroundColors = [.textBackgroundColor]; collection.collectionViewLayout = context.coordinator.layout
         collection.register(GalleryCell.self,forItemWithIdentifier:galleryItemID)
-        collection.register(GalleryHeader.self,forSupplementaryViewOfKind:headerKind,withIdentifier:galleryHeaderID)
         collection.dataSource = context.coordinator; collection.delegate = context.coordinator
         collection.preview = { [weak model] in if model?.selectedAsset != nil { model?.previewPresented = true } }
         collection.actionMenu = { [weak coordinator = context.coordinator] path in coordinator?.menu(path) ?? NSMenu() }
@@ -196,10 +177,6 @@ struct NativePhotoGallery: NSViewRepresentable {
             let cell = collectionView.makeItem(withIdentifier:galleryItemID,for:path) as! GalleryCell
             let asset = layout.groups[path.section].assets[path.item]
             cell.configure(asset,available:asset.available && model.availability[asset.asset.sourceID] == "Connected"); return cell
-        }
-        func collectionView(_ collectionView: NSCollectionView, viewForSupplementaryElementOfKind kind: NSCollectionView.SupplementaryElementKind, at path: IndexPath) -> NSView {
-            let header = collectionView.makeSupplementaryView(ofKind:kind,withIdentifier:galleryHeaderID,for:path) as! GalleryHeader
-            header.label.stringValue = layout.groups[path.section].title; return header
         }
         func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt paths: Set<IndexPath>) {
             if let path = paths.first { model.selectAsset(layout.groups[path.section].assets[path.item].id) }

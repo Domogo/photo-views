@@ -135,6 +135,12 @@
         "bytes": 67108864,
         "images": 256
       }
+    },
+    "continuousGallery": {
+      "headings": false,
+      "sectionGaps": false,
+      "grouping": "ordering only",
+      "layout": "one shortest-column placement over all results"
     }
   },
   "components": [],
