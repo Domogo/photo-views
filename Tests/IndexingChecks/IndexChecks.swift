@@ -72,6 +72,7 @@ func index(_ coordinator: IndexCoordinator, catalog: URL, cache: URL, source: Ca
         if CommandLine.arguments.count == 5 && CommandLine.arguments[1] == "--fixtures" {
             try realFixtures(manifest:URL(fileURLWithPath:CommandLine.arguments[2]),sourceRoot:URL(fileURLWithPath:CommandLine.arguments[3]),output:URL(fileURLWithPath:CommandLine.arguments[4])); return
         }
+        try checkM7()
         var exposure = MetadataRecord()
         exposure.shutterSeconds = 1.0 / 8000
         try check(exposure.exposureDescription == "1/8000 s", "Fast shutter speed lost precision")
@@ -176,7 +177,7 @@ func index(_ coordinator: IndexCoordinator, catalog: URL, cache: URL, source: Ca
         try check(try ImagePipeline.hash(moved) == originalHash,"Eviction touched an original")
         // Reconstruct the M1 schema and prove its source/recipe records migrate intact.
         var recipe = ViewRecipe(); recipe.sourceIDs = [source.id]; try store.storeWorkspaceRecipe(recipe)
-        try sql(db,"DROP INDEX tag_asset_name; DROP TABLE tag_runs; ALTER TABLE tag_assignments DROP COLUMN score; ALTER TABLE tag_assignments DROP COLUMN threshold; ALTER TABLE tag_assignments DROP COLUMN vocabulary_version; DROP INDEX job_asset_stage_version; DROP TABLE derivatives; DROP TABLE source_scans; DROP INDEX asset_file_identity; ALTER TABLE assets DROP COLUMN scan_token; ALTER TABLE assets DROP COLUMN content_hash; ALTER TABLE metadata DROP COLUMN capture_date; PRAGMA user_version=1;")
+        try sql(db,"DROP TABLE pair_exclusions; DROP INDEX tag_asset_name; DROP TABLE tag_runs; ALTER TABLE tag_assignments DROP COLUMN score; ALTER TABLE tag_assignments DROP COLUMN threshold; ALTER TABLE tag_assignments DROP COLUMN vocabulary_version; DROP INDEX job_asset_stage_version; DROP TABLE derivatives; DROP TABLE source_scans; DROP INDEX asset_file_identity; ALTER TABLE assets DROP COLUMN scan_token; ALTER TABLE assets DROP COLUMN content_hash; ALTER TABLE metadata DROP COLUMN capture_date; PRAGMA user_version=1;")
         let migrated = try Catalog(url:db)
         try check(try migrated.version == Catalog.schemaVersion && migrated.sources().first?.id == source.id && migrated.workspaceRecipe() == recipe,"M1 migration lost records")
         print("PASS: orientation, original metadata/integrity, failure isolation, hidden sidecars, pause/reopen/resume, unchanged reuse, stable moves, changed-file reindex, interrupted jobs and actual worker-process termination, missing/disconnected semantics, cache quota, and M1 migration.")

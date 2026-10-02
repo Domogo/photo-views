@@ -8,6 +8,7 @@ public enum ImagePipeline {
     public static let version = "imageio-m2-v1"
     // Extensions route discovery, not compatibility claims. ImageIO validates each actual file.
     public static let extensions: Set<String> = ["jpg","jpeg","png","heic","heif","tif","tiff","webp","avif","nef","nrw","arw","sr2","srf","cr2","cr3","crw","raf","orf","rw2","rwl","dng","pef","ptx","srw","3fr","fff","iiq","mos","kdc","dcr","erf","mef","mrw","raw"]
+    public static let rawExtensions = extensions.subtracting(["jpg","jpeg","png","heic","heif","tif","tiff","webp","avif"])
     static func open(_ url: URL) throws -> CGImageSource {
         guard let source = CGImageSourceCreateWithURL(url as CFURL,[kCGImageSourceShouldCache:false] as CFDictionary), CGImageSourceGetCount(source) > 0 else {
             throw PipelineError.failed("ImageIO cannot read this file. Check the camera variant or whether the file is damaged.")

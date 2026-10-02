@@ -16,7 +16,7 @@ public enum CatalogError: LocalizedError {
 public final class Catalog {
     var db: OpaquePointer?
     public let url: URL
-    public static let schemaVersion = 3
+    public static let schemaVersion = 4
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
     let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -37,7 +37,9 @@ public final class Catalog {
             if version == 0 { try migrate() }
             if try scalar("PRAGMA user_version") == 1 { try migrateIndexing() }
             if try scalar("PRAGMA user_version") == 2 { try migrateOrganization() }
+            if try scalar("PRAGMA user_version") == 3 { try migratePairing() }
             try execute("PRAGMA journal_mode=WAL")
+            if version < 4 { for source in try sources() { try reconcilePairs(sourceID:source.id) } }
         } catch {
             if let db { sqlite3_close(db) }; db = nil
             throw error
@@ -46,6 +48,13 @@ public final class Catalog {
     deinit { if let db { sqlite3_close(db) } }
     public var version: Int { get throws { try scalar("PRAGMA user_version") } }
 
+    private func migratePairing() throws {
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try execute("CREATE TABLE pair_exclusions(first_asset_id TEXT NOT NULL REFERENCES assets(id), second_asset_id TEXT NOT NULL REFERENCES assets(id), PRIMARY KEY(first_asset_id,second_asset_id)); PRAGMA user_version=4;")
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
     private func migrateOrganization() throws {
         try execute("BEGIN IMMEDIATE")
         do {

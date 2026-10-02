@@ -174,6 +174,8 @@ struct WorkspaceView: View {
                         Button("Revert Changes") { if let view = model.savedViews.first(where:{ $0.id == model.selectedSavedView }) { model.selectView(view) } }.disabled(!model.hasUnsavedChanges)
                     }
                     Divider()
+                    Toggle("Collapse RAW + JPEG",isOn:Binding(get:{ model.recipe.collapsePairs != false },set:{ model.recipe.collapsePairs = $0 }))
+                    Button("Restore Automatic Pairs") { model.restorePairs() }
                     Button("Refresh Results") { model.refreshAssets() }
                 }.help("Group, sort or save this view")
                 if model.searchMode == "visual" && !model.recipe.search.isEmpty { Button("Interpret") { filtersVisible = false; queryHelp = false; model.interpretQuery() }.accessibilityLabel("Interpret Query").help("Review supported query clauses as editable exact filters") }
@@ -328,9 +330,13 @@ struct WorkspaceView: View {
                     VStack(alignment:.leading,spacing:12) {
                         Label(source.name,systemImage:"folder").font(.body.weight(.medium))
                         LabeledContent("Availability",value:model.availability[source.id] ?? "Checking…")
-                        LabeledContent("Photos",value:String(model.indexProgress.first { $0.sourceID == source.id }?.total ?? 0))
+                        LabeledContent("Files",value:String(model.indexProgress.first { $0.sourceID == source.id }?.total ?? 0))
                         Text(source.lastKnownPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                         Button("Reveal in Finder") { model.revealSource() }
+                        if model.availability[source.id] != "Connected" {
+                            Text("Cached previews, metadata and search stay available. Reconnect the drive to resume indexing and open originals.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                            Button("Check Drive") { model.refreshAccess() }
+                        }
                         if model.availability[source.id] == "Access needed" {
                             Button("Restore Access…") { model.chooseFolder(reauthorizing:source) }
                         }
@@ -369,7 +375,7 @@ struct WorkspaceView: View {
                             Spacer()
                             Button(model.visualIndexing ? (model.visualPaused ? "Pausing…" : "Pause Visual Indexing") : "Build Visual Index") { if model.visualIndexing { model.pauseVisualIndexing() } else { model.startVisualIndexing() } }.disabled(model.visualIndexing && model.visualPaused)
                         }
-                        Text("Suggested tags prepared: \(model.tagCoverage.prepared) of \(model.tagCoverage.total)").font(.caption).foregroundStyle(.secondary)
+                        Text("Files with tag suggestions: \(model.tagCoverage.prepared) of \(model.tagCoverage.total)").font(.caption).foregroundStyle(.secondary)
                         if model.visualCoverage.failed > 0 {
                             Text("\(model.visualCoverage.failed) photos need attention").font(.caption)
                             ForEach(model.visualCoverage.failures ?? [],id:\.assetID) { failure in
@@ -386,7 +392,7 @@ struct WorkspaceView: View {
                 } label: {
                     HStack(spacing:8) {
                         if model.indexing || model.visualIndexing { ProgressView().controlSize(.small) }
-                        Text("\(model.visualCoverage.embedded) of \(model.visualCoverage.total) photos visually indexed")
+                        Text("\(model.visualCoverage.embedded) of \(model.visualCoverage.total) files visually indexed")
                             .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     }
                 }.padding(.horizontal,20).padding(.vertical,10)
@@ -397,6 +403,16 @@ struct WorkspaceView: View {
         VStack(alignment:.leading,spacing:12) {
             Text(asset.filename).font(.body.weight(.medium)).textSelection(.enabled)
             CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0)).frame(height:128)
+            if model.selectedPairMembers.count == 2 {
+                Text("RAW + JPEG").font(.subheadline.weight(.semibold))
+                ForEach(model.selectedPairMembers) { member in
+                    Button { model.selectAsset(member.id) } label: {
+                        HStack { Text(member.filename); Spacer(); if member.id == asset.id { Image(systemName:"checkmark") } }
+                    }.help("Inspect this member’s metadata, tags and original")
+                }
+                Text("Metadata, tags, favorites and collection membership belong to the selected file.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                Button("Separate Pair") { model.separateSelectedPair() }
+            }
             Button("Open Preview") { model.previewPresented = true }
             Button { model.toggleFavorite() } label: { Label(model.selectedFavorite ? "Remove Favorite" : "Favorite",systemImage:model.selectedFavorite ? "heart.fill" : "heart") }
             Menu("Collections") {
@@ -410,7 +426,7 @@ struct WorkspaceView: View {
             Button("Reveal Original in Finder") { model.revealPhoto() }
             PhotoTags(model:model)
             Divider()
-            LabeledContent("Original",value:model.originalAvailable(asset) ? "Available" : asset.available ? "Drive disconnected" : "Missing")
+            LabeledContent("Original",value:model.originalAvailable(asset) ? "Available" : model.availability[asset.asset.sourceID] == "Connected" ? "Missing or unreadable" : "Drive disconnected or access needed")
             if let metadata = asset.metadata {
                 LabeledContent("Camera",value:metadata.camera ?? "Unknown")
                 LabeledContent("Captured",value:metadata.captureDateText ?? "Unknown")

@@ -38,6 +38,7 @@ public struct ExactFilters: Codable, Equatable {
     public init() {}
 }
 public struct ViewRecipe: Codable, Equatable {
+    public var collapsePairs: Bool?
     public var collectionID: UUID?
     public var favoritesOnly: Bool?
     public var sourceIDs: [UUID] = []
@@ -152,6 +153,8 @@ public struct IndexJobRecord: Identifiable, Codable {
 }
 
 public struct IndexedAsset: Identifiable, Codable {
+    public var photoID: UUID?
+    public var pairedAssetIDs: [UUID]?
     public var favorite: Bool?
     public var primarySubject: String?
     public var primarySubjectSuggested: Bool?

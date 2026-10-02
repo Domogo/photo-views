@@ -45,7 +45,7 @@ struct PhotoGrid: View {
             ScrollViewReader { scroll in
                 ScrollView {
                     LazyVStack(alignment:.leading,spacing:24) {
-                        Text(model.isRankedSearch ? "\(model.assets.count) nearest results · Ranked by similarity" : "\(model.assets.count) of \(model.resultCount) photos shown")
+                        Text(model.isRankedSearch ? "\(model.assets.count) nearest results · Ranked by similarity" : "\(model.assets.count) of \(model.resultCount) \(model.recipe.collapsePairs == false ? "files" : "photos") shown")
                             .font(.caption).foregroundStyle(.secondary)
                         ForEach(groups) { group in
                             if !group.title.isEmpty {

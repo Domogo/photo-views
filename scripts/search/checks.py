@@ -16,6 +16,8 @@ class SearchChecks(unittest.TestCase):
         CREATE TABLE embeddings(asset_id TEXT,model_version TEXT,dimensions INTEGER,vector BLOB,PRIMARY KEY(asset_id,model_version));
         CREATE TABLE tag_assignments(asset_id TEXT,tag TEXT,provenance TEXT,decision TEXT,id TEXT,model_version TEXT,score REAL,threshold REAL,vocabulary_version TEXT);
         CREATE TABLE tag_runs(asset_id TEXT PRIMARY KEY,vocabulary_version TEXT,model_version TEXT,input_fingerprint TEXT);
+        CREATE TABLE photos(id TEXT PRIMARY KEY,primary_asset_id TEXT);
+        CREATE TABLE photo_assets(photo_id TEXT,asset_id TEXT UNIQUE);
         CREATE TABLE collections(id TEXT PRIMARY KEY,name TEXT);
         CREATE TABLE collection_assets(collection_id TEXT,asset_id TEXT,PRIMARY KEY(collection_id,asset_id));''')
         for id,source,path,camera,day,score in [('a','one','Japan/car.jpg','Nikon','2025:11:06',1),('b','one','Japan/lake.nef','Nikon','2025:11:07',.8),('c','two','Elsewhere/car.arw','Sony','2024:01:01',.9),('d','one','Unknown/car.jpg',None,None,.7)]:
@@ -31,6 +33,29 @@ class SearchChecks(unittest.TestCase):
     def tearDown(self):self.worker.db.close();self.tmp.cleanup()
     def query(self,recipe,mode='filename'):
         return self.worker.handle({'protocol':1,'op':'query','recipe':recipe,'mode':mode,'limit':1})
+    def test_pair_collapse_respects_asset_constraints_and_selection(self):
+        db=sqlite3.connect(self.path)
+        db.execute("INSERT INTO photos VALUES('p','b')")
+        db.executemany("INSERT INTO photo_assets VALUES('p',?)",[('a',),('b',)])
+        db.commit();db.close()
+        result=self.worker.query({'recipe':{},'limit':100,'selectedAssetID':'a'})
+        self.assertEqual(result['resultCount'],3)
+        self.assertEqual(sum(a['photoID']=='p' for a in result['assets']),1)
+        self.assertEqual(result['selectedAsset']['asset']['id'],'a')
+        similar=self.worker.query({'recipe':{'referenceAssetID':'b'},'mode':'visual'})
+        self.assertFalse({'a','b'} & {a['asset']['id'] for a in similar['assets']})
+        separate=self.worker.query({'recipe':{'collapsePairs':False}})
+        self.assertEqual(separate['resultCount'],4)
+        jpeg=self.worker.query({'recipe':{'filters':{'format':'JPG'}}})
+        self.assertTrue(all(a['metadata']['format']=='JPG' for a in jpeg['assets']))
+        db=sqlite3.connect(self.path);db.execute("INSERT INTO collection_assets VALUES('pick','a')");db.commit();db.close()
+        picked=self.worker.query({'recipe':{'collectionID':'pick'},'selectedAssetID':'b'})
+        self.assertEqual([a['asset']['id'] for a in picked['assets']],['a'])
+        self.assertIsNone(picked['selectedAsset'])
+        # Missing originals retain cached retrieval and pair membership.
+        self.assertTrue(all(not a['available'] for a in result['assets']))
+        self.assertEqual(len(next(a for a in result['assets'] if a['photoID']=='p')['pairedAssetIDs']),2)
+
     def test_complete_metadata_constraints(self):
         payload={'lens':'Prime','iso':400,'aperture':2.8,'shutterSeconds':0.002,'width':6000,'height':4000,'format':'JPG','camera':'Nikon','captureDateText':'2025:11:06'}
         self.worker.db.execute('UPDATE metadata SET payload=? WHERE asset_id=?',[json.dumps(payload).encode(),'a']);self.worker.db.commit()

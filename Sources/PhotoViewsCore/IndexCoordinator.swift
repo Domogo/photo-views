@@ -78,6 +78,10 @@ public final class IndexCoordinator: @unchecked Sendable {
         }
         if shouldPause { try store.scanState(source.id,"paused"); return }
         // A partially unreadable enumeration cannot prove that an unseen file was deleted.
+        var rootDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath:root.path,isDirectory:&rootDirectory), rootDirectory.boolValue, FileManager.default.isReadableFile(atPath:root.path) else {
+            try store.scanState(source.id,"disconnected",error:"Drive disconnected during scanning. Cached records are preserved."); changed(true); return
+        }
         if enumerationError == nil { try store.finishDiscovery(sourceID:source.id,token:token) }
         try store.scanState(source.id,"indexing",error:enumerationError.map { "Some folders could not be scanned: \($0.localizedDescription)" }); changed(true)
         let pending = try store.pendingAssets(sourceID:source.id)
@@ -110,12 +114,17 @@ public final class IndexCoordinator: @unchecked Sendable {
                     checkpoint(asset.id,.preview)
                 }
             } catch {
+                if !FileManager.default.fileExists(atPath:root.path) || !FileManager.default.isReadableFile(atPath:root.path) {
+                    try store.recoverJobs(sourceID:source.id)
+                    try store.scanState(source.id,"disconnected",error:"Drive disconnected during indexing. Reconnect to resume saved progress."); changed(true); return
+                }
                 if try store.jobState(asset.id,.metadata) == .running { try store.job(asset.id,stage:.metadata,state:.failed,error:error.localizedDescription) }
                 try store.job(asset.id,stage:.preview,state:.failed,error:error.localizedDescription)
             }
             if index % 32 == 31 { try cache.prune(catalog:store) }
             changed(false)
         }
+        try store.reconcilePairs(sourceID:source.id)
         try store.scanState(source.id,shouldPause ? "paused" : enumerationError == nil ? "complete" : "failed",error:enumerationError?.localizedDescription)
     }
 }

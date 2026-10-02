@@ -239,17 +239,31 @@ class Worker:
             if sort=='filename': ranked = sorted(by_id,key=lambda id:(by_id[id]['relative_path'].casefold(),id))
             else: ranked = sorted(by_id,key=lambda id:((by_id[id]['capture_date'] or by_id[id]['modified_at'] or 0),id),reverse=sort!='captureOldest')
         # Semantic searches return nearest neighbors, not guaranteed matches. No probability claims.
+        # Constraints apply to each asset before logical-photo collapsing. The first ranked matching
+        # member represents the photo; no sibling can bypass exact filters or collection membership.
+        associations = {r['asset_id']:r['photo_id'] for r in self.db.execute('SELECT asset_id,photo_id FROM photo_assets')}
+        collapse = recipe.get('collapsePairs') is not False
+        if collapse and reference in associations:
+            ranked = [id for id in ranked if associations.get(id) != associations[reference]]
+        matching = set(ranked)
+        if collapse:
+            seen = set(); collapsed = []
+            for id in ranked:
+                key = associations.get(id,id)
+                if key not in seen: seen.add(key); collapsed.append(id)
+            ranked = collapsed
         total = len(ranked)
         limit = min(10000,max(1,request.get('limit',500)))
         eligible = set(ranked[:100] if searching and mode!='filename' else ranked)
         ranked = ranked[:min(limit,100) if searching and mode!='filename' else limit]
-        subjects=self.subjects(eligible)
+        eligible_members = {id for id in matching if id in eligible or (collapse and associations.get(id) in {associations.get(r) for r in eligible if r in associations})}
+        subjects=self.subjects(eligible_members)
         def asset_payload(id):
             row=by_id[id]; metadata=json.loads(row['payload']) if row['payload'] else None
-            return {'favorite':bool(row['favorite']),'primarySubject':subjects[id][1] if id in subjects else None,'primarySubjectSuggested':subjects[id][2] if id in subjects else False,'asset':{'id':id,'sourceID':row['source_id'],'relativePath':row['relative_path'],'fileID':row['file_id'],'byteSize':row['byte_size'],'modifiedAt':row['modified_at']-978307200 if row['modified_at'] is not None else None},'available':bool(row['available']), 'metadata':metadata,'thumbnailPath':row['thumbnail_path'],'analysisPath':row['analysis_path'],'pipelineVersion':row['pipeline_version'],'previewSource':row['preview_source'],'previewState':row['state'],'error':row['error']}
+            return {'photoID':associations.get(id),'pairedAssetIDs':[r[0] for r in self.db.execute('SELECT asset_id FROM photo_assets WHERE photo_id=? ORDER BY asset_id',[associations[id]])] if id in associations else None,'favorite':bool(row['favorite']),'primarySubject':subjects[id][1] if id in subjects else None,'primarySubjectSuggested':subjects[id][2] if id in subjects else False,'asset':{'id':id,'sourceID':row['source_id'],'relativePath':row['relative_path'],'fileID':row['file_id'],'byteSize':row['byte_size'],'modifiedAt':row['modified_at']-978307200 if row['modified_at'] is not None else None},'available':bool(row['available']), 'metadata':metadata,'thumbnailPath':row['thumbnail_path'],'analysisPath':row['analysis_path'],'pipelineVersion':row['pipeline_version'],'previewSource':row['preview_source'],'previewState':row['state'],'error':row['error']}
         assets = [asset_payload(id) for id in ranked]
         selected = request.get('selectedAssetID')
-        selected_asset = asset_payload(selected) if selected in eligible else None
+        selected_asset = asset_payload(selected) if selected in eligible_members else None
         source_clauses, source_args = constraints({'sourceIDs':recipe.get('sourceIDs',[])})
         where=' WHERE '+' AND '.join(source_clauses) if source_clauses else ''
         cameras = [r[0] for r in self.db.execute("SELECT DISTINCT json_extract(CAST(m.payload AS TEXT),'$.camera') FROM assets a JOIN metadata m ON m.asset_id=a.id"+where+(' AND ' if where else ' WHERE ')+"json_extract(CAST(m.payload AS TEXT),'$.camera') IS NOT NULL ORDER BY 1",source_args)]

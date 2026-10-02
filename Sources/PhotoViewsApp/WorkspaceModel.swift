@@ -67,8 +67,14 @@ import PhotoViewsCore
             recipe = try store.workspaceRecipe()
             persistedRecipe = recipe
             if let id = try store.selectedView(), savedViews.contains(where:{ $0.id == id }) { selectedSavedView = id }
+            visualPaused = UserDefaults.standard.bool(forKey:"visualIndexingPaused")
             isReady = true
+            indexProgress = try store.progress()
             refreshAccess()
+            accessTimer = Timer.scheduledTimer(withTimeInterval:5,repeats:true) { [weak self] _ in Task { @MainActor in self?.refreshAccess() } }
+            for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification] {
+                mountObservers.append(NSWorkspace.shared.notificationCenter.addObserver(forName:name,object:nil,queue:.main) { [weak self] _ in Task { @MainActor in self?.refreshAccess() } })
+            }
             refreshAssets()
             visualPaused = UserDefaults.standard.bool(forKey:"visualIndexingPaused")
             if !visualPaused { startVisualIndexing() }
@@ -190,19 +196,31 @@ import PhotoViewsCore
         refreshAccess()
         startIndexing(added)
     }
-    func refreshAccess() {
+    private var accessTimer: Timer?
+    private var mountObservers: [NSObjectProtocol] = []
+    private var resolvedRoots: [UUID:URL] = [:]
+    func refreshAccess(rescanOnReconnect: Bool = true) {
         guard let catalog else { return }
+        var reconnected: [CatalogSource] = []
+        let priorAvailability = availability
         for source in sources {
+            resolvedRoots[source.id] = nil
             if let active = scopedURLs.removeValue(forKey:source.id) { active.stopAccessingSecurityScopedResource() }
             do {
                 let resolution = try FolderAccess.resolve(source)
+                resolvedRoots[source.id] = resolution.url
                 let scoped = resolution.url.startAccessingSecurityScopedResource()
                 if scoped { scopedURLs[source.id] = resolution.url }
                 var directory: ObjCBool = false
                 let exists = FileManager.default.fileExists(atPath:resolution.url.path,isDirectory:&directory)
                 if !exists || !directory.boolValue { availability[source.id] = "Disconnected or missing" }
                 else if !FileManager.default.isReadableFile(atPath:resolution.url.path) { availability[source.id] = "Access needed" }
-                else { availability[source.id] = "Connected" }
+                else {
+                    availability[source.id] = "Connected"
+                    let wasDisconnected = priorAvailability[source.id] != nil && priorAvailability[source.id] != "Connected"
+                    let interrupted = indexProgress.contains { $0.sourceID == source.id && ["disconnected","discovering","indexing"].contains($0.state) }
+                    if rescanOnReconnect && (wasDisconnected || (priorAvailability[source.id] == nil && interrupted)) { reconnected.append(source) }
+                }
                 if exists && (resolution.stale || resolution.url.path != source.lastKnownPath) {
                     let refreshed = try FolderAccess.source(for:resolution.url)
                     _ = try catalog.register(CatalogSource(id:source.id,name:source.name,bookmark:refreshed.bookmark,
@@ -211,7 +229,8 @@ import PhotoViewsCore
             } catch { availability[source.id] = "Access needed" }
         }
         do { sources = try catalog.sources() } catch { errorMessage = error.localizedDescription }
-        refreshAssets()
+        if priorAvailability != availability { refreshAssets() }
+        if !reconnected.isEmpty { startIndexing(reconnected) }
     }
     @discardableResult func saveView(name: String, update: Bool = false) -> Bool {
         guard let catalog else { return false }
@@ -399,7 +418,7 @@ import PhotoViewsCore
                 if case .finished(let error) = event {
                     self.indexing = false; self.pausing = false
                     if let error { self.errorMessage = error }
-                    self.refreshAccess()
+                    self.refreshAccess(rescanOnReconnect:false)
                     if !self.visualPaused { self.startVisualIndexing() }
                     if !self.queuedSources.isEmpty {
                         let queued = self.queuedSources; self.queuedSources = []; self.startIndexing(queued)
@@ -418,7 +437,22 @@ import PhotoViewsCore
         refreshSelectedOrganization()
         try? catalog?.touchPreviews([id])
     }
-    func originalAvailable(_ asset: IndexedAsset) -> Bool { asset.available && availability[asset.asset.sourceID] == "Connected" }
+    var selectedPairMembers: [IndexedAsset] {
+        guard let id = selectedAssetID else { return [] }
+        return ((try? catalog?.pairMembers(id)) ?? []).map { normalizeCache($0) }
+    }
+    func separateSelectedPair() {
+        guard let id = selectedAssetID else { return }
+        do { try catalog?.separatePair(containing:id); refreshAssets() } catch { errorMessage = error.localizedDescription }
+    }
+    func restorePairs() {
+        do { for source in scopedSources { try catalog?.restorePairing(sourceID:source.id) }; refreshAssets() }
+        catch { errorMessage = error.localizedDescription }
+    }
+    func originalAvailable(_ asset: IndexedAsset) -> Bool {
+        guard asset.available, availability[asset.asset.sourceID] == "Connected", let root = resolvedRoots[asset.asset.sourceID] else { return false }
+        return FileManager.default.isReadableFile(atPath:root.appendingPathComponent(asset.asset.relativePath).path)
+    }
     func revealPhoto() {
         guard let asset = selectedAsset, let source = sources.first(where: { $0.id == asset.asset.sourceID }) else { return }
         guard originalAvailable(asset) else { errorMessage = "Reconnect the source drive or restore access to reveal this original. Cached previews remain available."; return }
