@@ -99,7 +99,7 @@ private final class GalleryCollection: NSCollectionView {
         })?.key { choose(next) }
     }
     private func choose(_ path: IndexPath) {
-        selectionIndexPaths = [path]; delegate?.collectionView?(self,didSelectItemsAt:[path]); scrollToItems(at:[path],scrollPosition:.nearestVerticalEdge)
+        if selectionIndexPaths != [path] { selectionIndexPaths = [path]; delegate?.collectionView?(self,didSelectItemsAt:[path]) }; scrollToItems(at:[path],scrollPosition:.nearestVerticalEdge)
     }
     override func mouseDown(with event: NSEvent) {
         super.mouseDown(with:event)
@@ -193,10 +193,41 @@ struct NativePhotoGallery: NSViewRepresentable {
             if let path = paths.first { model.selectAsset(layout.groups[path.section].assets[path.item].id) }
         }
         fileprivate func menu(_ path: IndexPath) -> NSMenu {
-            let menu = NSMenu()
+            let menu = NSMenu(); menu.autoenablesItems = false
             for (title,action) in [("Preview",#selector(openPreview)),("Find Similar",#selector(findSimilar)),("Reveal Original in Finder",#selector(reveal))] {
                 let item = NSMenuItem(title:title,action:action,keyEquivalent:""); item.target = self; menu.addItem(item)
-            }; return menu
+            }
+            let editors = installedPhotoEditors()
+            if !editors.isEmpty { menu.addItem(.separator()) }
+            for (name,url) in editors {
+                let item = NSMenuItem(title:"Open in " + name,action:#selector(openEditor(_:)),keyEquivalent:"")
+                item.target = self; item.representedObject = url
+                item.isEnabled = model.selectedAsset.map { model.originalAvailable($0) } ?? false
+                menu.addItem(item)
+            }
+            return menu
+        }
+        private func installedPhotoEditors() -> [(String,URL)] {
+            var found: [String:URL] = [:]
+            let roots = [URL(fileURLWithPath:"/Applications"),FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
+            for root in roots {
+                guard let entries = FileManager.default.enumerator(at:root,includingPropertiesForKeys:nil,options:[.skipsHiddenFiles,.skipsPackageDescendants]) else { continue }
+                for case let url as URL in entries {
+                    if entries.level > 3 { entries.skipDescendants(); continue }
+                    guard url.pathExtension == "app", let bundle = Bundle(url:url) else { continue }
+                    let name = (bundle.object(forInfoDictionaryKey:"CFBundleDisplayName") as? String ?? bundle.object(forInfoDictionaryKey:"CFBundleName") as? String ?? url.deletingPathExtension().lastPathComponent).lowercased()
+                    if name == "photomator" { found["Photomator"] = url }
+                    if name.contains("lightroom") {
+                        let label = name.contains("classic") ? "Lightroom Classic" : "Lightroom"
+                        found[label] = url
+                    }
+                }
+            }
+            return found.sorted { $0.key < $1.key }.map { ($0.key,$0.value) }
+        }
+        @objc private func openEditor(_ sender: NSMenuItem) {
+            guard let application = sender.representedObject as? URL else { return }
+            model.openOriginal(in:application)
         }
         @objc private func openPreview() { model.previewPresented = true }
         @objc private func findSimilar() { model.findSimilar() }

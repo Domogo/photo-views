@@ -78,3 +78,5 @@ Palette analysis uses existing sRGB previews in bounded local batches. It needs 
 Revision evidence and remaining native handoff: [CANVAS_STATUS.md](CANVAS_STATUS.md).
 
 Ranked search now keeps candidates meeting Minimum match score in Filters (text default 0.20, reference-image default 0.75), then loads 500 more as you approach the gallery end. The status shows loaded versus total qualifying logical photos. Scores are cosine similarity, not probabilities; defaults are provisional, not calibrated relevance guarantees. Palette-only search uses palette coverage instead. Saved recipes retain an explicit score threshold.
+
+Right-click a photo to open its selected original in Photomator, Lightroom or Lightroom Classic. Only installed editors under Applications are listed; shortcuts are disabled when the original is unavailable. RAW+JPEG member selection is respected. Photo Views does not edit or copy the original as part of launching the editor.

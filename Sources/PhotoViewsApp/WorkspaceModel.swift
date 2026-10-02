@@ -504,6 +504,16 @@ import PhotoViewsCore
         guard asset.available, availability[asset.asset.sourceID] == "Connected", let root = resolvedRoots[asset.asset.sourceID] else { return false }
         return FileManager.default.isReadableFile(atPath:root.appendingPathComponent(asset.asset.relativePath).path)
     }
+    func openOriginal(in application: URL) {
+        guard let asset = selectedAsset, originalAvailable(asset), let root = resolvedRoots[asset.asset.sourceID] else {
+            errorMessage = "Reconnect the source drive or restore access to open this original."
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        NSWorkspace.shared.open([root.appendingPathComponent(asset.asset.relativePath)],withApplicationAt:application,configuration:configuration) { [weak self] _,error in
+            if let error { DispatchQueue.main.async { self?.errorMessage = "Could not open the original: " + error.localizedDescription } }
+        }
+    }
     func revealPhoto() {
         guard let asset = selectedAsset, let source = sources.first(where: { $0.id == asset.asset.sourceID }) else { return }
         guard originalAvailable(asset) else { errorMessage = "Reconnect the source drive or restore access to reveal this original. Cached previews remain available."; return }
