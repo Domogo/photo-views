@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-02T14:33:48.229815+00:00",
+  "generatedAt": "2026-10-02T18:20:00.112111+00:00",
   "title": "Design System: Photo Views",
   "extensions": {
     "nativePlatform": {
@@ -13,17 +13,19 @@
         "Sources/PhotoViewsApp/PhotoGrid.swift",
         "Sources/PhotoViewsApp/FilterChips.swift",
         "Sources/PhotoViewsApp/WorkspaceModel.swift",
-        "Sources/PhotoViewsApp/PhotoViewsApp.swift"
+        "Sources/PhotoViewsApp/PhotoViewsApp.swift",
+        "Sources/PhotoViewsApp/NativePhotoGallery.swift",
+        "Sources/PhotoViewsCore/GalleryGeometry.swift"
       ],
       "colorSemantics": {
         "canvas": "NSColor.textBackgroundColor",
         "inspector": "NSColor.controlBackgroundColor",
         "primaryText": "system default primary text",
         "secondaryText": "foregroundStyle(.secondary)",
-        "selection": "2pt Color.accentColor photo outline; native List selection",
+        "selection": "2pt NSColor.controlAccentColor outline; native List selection",
         "primaryAction": "native borderedProminent button",
         "separator": "native Divider",
-        "focus": "1pt Color.accentColor.opacity(0.6) gallery boundary"
+        "focus": "AppKit NSCollectionView focus behavior"
       },
       "typographySemantics": {
         "emptyStateTitle": "title2 semibold",
@@ -62,11 +64,11 @@
       "saveSheetWidth": 400,
       "emptyExplanationMaxWidth": 380,
       "gallery": {
-        "layout": "Lazy shortest-column masonry",
+        "layout": "Recycled NSCollectionView cells with deterministic shortest-column geometry",
         "gutter": 8,
         "inset": 12,
         "columnSizingTarget": 208,
-        "aspectRatio": "Orientation-aware recorded dimensions; square fallback; scaledToFit; no captions"
+        "aspectRatio": "Orientation-aware recorded dimensions; square fallback; proportional NSImageView scaling; no captions"
       },
       "searchRow": {
         "horizontalPadding": 12,
@@ -80,17 +82,39 @@
     },
     "verification": {
       "revision": "Quiet photo canvas and overall palette",
-      "disposition": "pending",
-      "sourceCompilation": "passed, reported by implementation agent",
-      "renderedReview": "Pending: GUI locked; no revised UI captures reviewed. Earlier M1/M7 captures are historical and do not verify this revision.",
-      "captures": [],
+      "disposition": "ship at two-fix-list scope",
+      "reviewer": "Both material fixes resolved: blocked-query false no-match status and stale documentation. No remaining findings at that follow-up scope; not whole-surface, general performance or accessibility signoff.",
+      "sourceCompilation": "passed",
+      "localChecks": "Existing checks passed; CatalogChecks geometry covered 20,000 items at three widths in approximately 7ms for that check.",
+      "renderedReview": "Native wide/light and compact/dark QA complete; corrected blocked-query state confirmed. Final normal build reopened and natively verified.",
+      "captures": [
+        ".impeccable/review/canvas-wide-gallery.png",
+        ".impeccable/review/canvas-wide-filters.png",
+        ".impeccable/review/canvas-wide-palette.png",
+        ".impeccable/review/canvas-wide-blocked-query.png",
+        ".impeccable/review/canvas-wide-pair.png",
+        ".impeccable/review/canvas-compact-dark-gallery.png",
+        ".impeccable/review/canvas-compact-dark-filters.png"
+      ],
+      "verifiedInteraction": [
+        "Deep scroll of 3,416 logical gallery items reached bottom and remained responsive",
+        "Down changes selection; Space opens preview",
+        "JPEG/NEF pair-member switching",
+        "mostly green format:ARW applies exact chips on Return",
+        "Invalid location clause blocks execution"
+      ],
+      "boundedObservation": "Idle CPU 0%, RSS approximately 258MiB in the observed session; not FPS, frame-rate benchmark or broad performance guarantee.",
       "followUpVerification": [
-        "Wide/compact light/dark native gallery",
-        "Expanded filters and active palette",
-        "Selected RAW+JPEG inspector and blocked query",
-        "Keyboard focus/navigation, increased contrast, reduced motion",
-        "Measured palette/retrieval quality and performance"
-      ]
+        "Full accessibility including keyboard traversal, increased contrast and reduced motion",
+        "Broad palette/retrieval quality and measured frame-rate/performance"
+      ],
+      "nativeOnly": "Web detector unsupported; no HTML/iOS proxy evidence.",
+      "catalogContinuity": {
+        "schemaVersion": 5,
+        "files": 19877,
+        "savedViews": 2,
+        "palettes": 5085
+      }
     },
     "paletteSearch": {
       "version": "srgb-hsv-area-v1",
@@ -102,6 +126,15 @@
       ],
       "areaStep": 0.05,
       "coverage": "Partial preparation is visible; missing/failed data does not silently match"
+    },
+    "nativeGalleryResources": {
+      "decode": "Background ImageIO thumbnail decode, maximum 512px dimension",
+      "maximumConcurrentOperations": 4,
+      "reuse": "Cancel pending operation and clear image on cell reuse; identity check before display",
+      "cacheLimits": {
+        "bytes": 67108864,
+        "images": 256
+      }
     }
   },
   "components": [],
@@ -120,7 +153,7 @@
     },
     {
       "name": "Masonry gallery",
-      "implementation": "Lazy shortest-column placement, full orientation-aware proportions, accent outline, distinct focus boundary, spatial arrows and Space preview"
+      "implementation": "NSCollectionView recycled cells; deterministic shortest-column geometry; full orientation-aware proportions; 2pt accent outline; native focus; spatial arrows and Space preview; bounded background ImageIO decoding"
     },
     {
       "name": "Combined status",
@@ -137,7 +170,7 @@
   ],
   "narrative": {
     "northStar": "Photo Workbench",
-    "overview": "Minimal, bespoke, intuitive native macOS Photo Workbench, refreshed as a quiet photo canvas. A single search row leads a full-proportion masonry gallery; native filters and supporting panes appear when useful. Source compilation passed; revised native rendered and accessibility review remain pending because the GUI is locked.",
+    "overview": "Minimal, bespoke, intuitive native macOS Photo Workbench, refreshed as a quiet photo canvas. One search row leads a full-proportion recycled AppKit masonry gallery; native filters and supporting panes appear when useful. Source/local checks and native wide/light compact/dark QA passed. Reviewer disposition is ship at the two-fix-list scope after confirming corrected blocked-query state and documentation. This does not imply whole-surface, general performance or accessibility signoff.",
     "keyCharacteristics": [
       "Photograph-led neutral surroundings and full proportions",
       "Familiar native interaction with optional panes",

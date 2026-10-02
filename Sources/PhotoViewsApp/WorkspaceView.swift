@@ -254,7 +254,7 @@ struct WorkspaceView: View {
                 LazyVGrid(columns:[GridItem(.adaptive(minimum:70))],spacing:6) {
                     ForEach(PaletteSearch.colors,id:\.self) { color in
                         Button { model.recipe.palette = PaletteSearch(color:color,minimumFraction:model.recipe.palette?.minimumFraction ?? 0.25) } label: {
-                            HStack(spacing:4) { Circle().fill(paletteColor(color)).frame(width:10,height:10).overlay(Circle().stroke(.secondary,lineWidth:0.5)); Text(color.capitalized) }
+                            HStack(spacing:4) { Circle().fill(paletteColor(color)).frame(width:10,height:10).overlay(Circle().stroke(.secondary,lineWidth:0.5)); Text(color.capitalized); if model.recipe.palette?.color == color { Image(systemName:"checkmark").font(.caption2) } }
                         }.controlSize(.small).tint(model.recipe.palette?.color == color ? .accentColor : nil)
                             .accessibilityValue(model.recipe.palette?.color == color ? "Selected" : "Not selected")
                     }
@@ -340,6 +340,8 @@ struct WorkspaceView: View {
             emptyState(icon:"exclamationmark.triangle",title:"Search needs attention",detail:error) {
                 Button("Try Again") { model.refreshAssets() }
             }
+        } else if let plan = model.queryPlan {
+            emptyState(icon:"magnifyingglass",title:plan.canApply ? "Ready to search" : "Search needs correction",detail:plan.canApply ? "Press Return or Search to apply the recognized constraints." : "Edit the unsupported or ambiguous clauses above. This search has not run.") { EmptyView() }
         } else if model.assets.isEmpty && model.searching {
             emptyState(icon:"magnifyingglass",title:"Loading photos…",detail:"Preparing your local results.") { ProgressView().controlSize(.small) }
         } else if model.assets.isEmpty && (model.recipe.collectionID != nil || model.recipe.favoritesOnly == true) && !model.hasSearch && !model.hasFilters {
@@ -448,7 +450,7 @@ struct WorkspaceView: View {
                 } label: {
                     HStack(spacing:8) {
                         if model.indexing || model.visualIndexing { ProgressView().controlSize(.small) }
-                        Text(model.isRankedSearch ? "\(model.assets.count) ranked photos" : "\(model.resultCount) photos")
+                        Text(model.queryPlan != nil ? "Search not run" : model.isRankedSearch ? "\(model.assets.count) ranked photos" : "\(model.resultCount) photos")
                         Spacer()
                         Text("Indexed \(model.visualCoverage.embedded) / \(model.visualCoverage.total)")
                             .font(.caption).foregroundStyle(.secondary).monospacedDigit()

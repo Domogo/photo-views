@@ -26,7 +26,7 @@ Neutral surfaces follow system appearance. One natural-language search row leads
 - One search row with refinement on demand.
 - Explicit selection, availability, coverage, and provenance.
 
-The workspace contract is `.impeccable/surfaces/main-workspace.md`. This document records the implemented SwiftUI/AppKit source, not a web or iOS translation. Source compilation passed as reported by the implementation agent. **Rendered review is pending:** the GUI is locked, so revised wide/compact, light/dark, filter, palette, selected-pair and blocked-query captures are unavailable. Earlier M1/M7 captures do not verify this revision. Accessibility, retrieval quality and performance signoff are not implied by compilation.
+The workspace contract is `.impeccable/surfaces/main-workspace.md`. This document records the implemented SwiftUI/AppKit source, not a web or iOS translation. Source compilation and local catalog/search checks passed, including deterministic geometry checks for 20,000 items at three widths (approximately 7ms for that check). Revised native wide/light and compact/dark rendered QA is complete. Captures in `.impeccable/review/` cover `canvas-wide-gallery.png`, `canvas-wide-filters.png`, `canvas-wide-palette.png`, `canvas-wide-blocked-query.png`, `canvas-wide-pair.png`, `canvas-compact-dark-gallery.png` and `canvas-compact-dark-filters.png`. Reviewer disposition is **ship at the two-fix-list scope**: both material fixes (blocked-query status and stale documentation) are resolved, with no remaining findings in that follow-up. Source and corrected native state say “Search not run” and “Search needs correction”. This disposition does not constitute whole-surface, general performance or accessibility signoff. The normal app was reopened with the final build and natively verified; schema-5 catalog state retained 19,877 files, two saved views and 5,085 palettes. Earlier M1/M7 screenshots do not verify this revision. Full accessibility, broad retrieval quality and frame-rate benchmarking remain unverified. No web detector or HTML/iOS proxy applies to this native app.
 
 ## Colors
 
@@ -34,11 +34,11 @@ Appearance-aware neutrals and the user's macOS accent keep the photographs visua
 
 ### Primary
 
-Use `Color.accentColor` for the 2pt gallery selection outline and its 0.6-opacity 1pt gallery focus boundary. Native actions and sidebar selection follow the system accent. Validate all supported accent choices and increased contrast rather than assume readability.
+Use `NSColor.controlAccentColor` for the 2pt gallery selection outline. AppKit owns collection focus behavior. Native actions and sidebar selection follow the system accent. Validate all supported accent choices and increased contrast rather than assume readability.
 
 ### Neutral
 
-The workspace canvas uses `Color(nsColor: .textBackgroundColor)`; inspector and unfilled photo cells use `.controlBackgroundColor`. Primary text uses native defaults, supporting text `.foregroundStyle(.secondary)`, separators `Divider()`, and sidebar selection native `List(selection:)`. These dynamic roles have no fixed CSS or hex equivalents. Palette swatches are named native colors with text labels; they indicate a search family, not calibrated photograph color values.
+The workspace canvas uses `Color(nsColor: .textBackgroundColor)`; inspector and unfilled photo cells use `.controlBackgroundColor`. Primary text uses native defaults, supporting text `.foregroundStyle(.secondary)`, separators `Divider()`, and sidebar selection native `List(selection:)`. These dynamic roles have no fixed CSS or hex equivalents. Palette swatches are named native colors with text labels and a selected checkmark; they indicate a search family, not calibrated photograph color values.
 
 **The Photograph Rule.** Keep decorative color out of the image canvas; actual photographs carry the palette.
 
@@ -56,7 +56,7 @@ The initial sidebar and inspector are hidden. Sidebar visibility persists in `ga
 
 The search row contains the plain search field, Filters and View with 8pt gaps, 12pt horizontal and 10pt vertical padding. Active chips use a horizontal scroll row with 6pt gaps. Filters expands a scrollable drawer bounded to `max(120, min(280, availableHeight - 250))` pt. Query-plan review is 180pt high; optional syntax help is 70pt. Result and indexing counts share a compact disclosure row with 12pt horizontal and 6pt vertical padding; detailed progress and retries expand only on demand.
 
-The gallery uses lazy masonry columns, 8pt gutters and 12pt outer insets. Column count is `max(1, Int((availableWidth - 24 + 8) / 208))`; this is the source's 208pt column sizing target, with final widths distributed across the available space. Each next result is placed in the shortest column. Orientation values 5–8 swap recorded width/height for aspect calculations; missing dimensions use a square. Full photo height follows the resulting aspect ratio. Compact group headings remain when grouping is active; no filenames, format captions or permanent photo overlays occupy the gallery. Lazy stacks and incremental loading limit work; selected identity or visible scroll anchor is restored on regrouping.
+The gallery uses recycled `NSCollectionView` cells with deterministic shortest-column masonry geometry, 8pt gutters and 12pt outer insets. Column count is `max(1, Int((availableWidth - 24 + 8) / 208))`; this is the source's 208pt column sizing target, with final widths distributed across the available space. Each next result is placed in the shortest column. Orientation values 5–8 swap recorded width/height for aspect calculations; missing dimensions use a square. Full photo height follows the resulting aspect ratio. Compact group headings remain when grouping is active; no filenames, format captions or permanent photo overlays occupy the gallery. Visible cells are recycled; incremental loading extends results near the scroll end. Selected identity or a visible scroll anchor is restored on regrouping. ImageIO decodes gallery thumbnails in background operations to a maximum 512px dimension, with at most four concurrent operations, cancellation on reuse, and a cache limited to 64MiB/256 images. This replaces the SwiftUI lazy masonry implementation after a deep-scroll hang.
 
 The Workbench constants remain control gap 8pt, inspector content inset 20pt and section gap 24pt. Saving/collection sheets use 24pt padding and a 400pt width; empty explanation text has a 380pt maximum width. These are native point values, not browser breakpoints.
 
@@ -68,13 +68,13 @@ Flat content surfaces, tonal separation and native pane separators establish hie
 
 ## Shapes
 
-Native controls own radii, focus and hover rendering. Photo cells are rectangular, show full proportions with `scaledToFit`, and use a 2pt accent selection outline without obscuring content. The gallery focus boundary is separate from selection. Palette dots are 10pt circles with a 0.5pt secondary outline. There is no custom radius scale; native rounded-border fields remain native.
+Native controls own radii, focus and hover rendering. Photo cells are rectangular, show full proportions through `NSImageView.scaleProportionallyUpOrDown`, and use a 2pt accent selection outline without obscuring content. AppKit collection focus and photo selection remain separate concepts. Palette dots are 10pt circles with a 0.5pt secondary outline. There is no custom radius scale; native rounded-border fields remain native.
 
 ## Components
 
 ### Search and View
 
-The plain field says “Describe a photo…” in natural-language mode; filename/keyword mode is selected in View. Plain visual descriptions use debounced retrieval. Supported mixed queries apply on Return; an editable bounded plan exposes exact constraints, palette, grouping, ambiguous and unsupported clauses. Invalid plans disable Apply Plan. Help appears on demand. View contains search mode, grouping, sorting, saving/updating/reverting, RAW+JPEG collapse/restore and refresh. Ranked results disable manual sort. Saved definition changes remain explicit.
+The plain field says “Describe a photo…” in natural-language mode; filename/keyword mode is selected in View. Plain visual descriptions use debounced retrieval. Supported mixed queries apply on Return; an editable bounded plan exposes exact constraints, palette, grouping, ambiguous and unsupported clauses. Invalid plans disable Apply Plan and report “Search not run” / “Search needs correction” rather than a false zero-result or no-match claim. Native checks confirmed “mostly green format:ARW” applies exact chips on Return and an invalid location clause blocks execution. Help appears on demand. View contains search mode, grouping, sorting, saving/updating/reverting, RAW+JPEG collapse/restore and refresh. Ranked results disable manual sort. Saved definition changes remain explicit.
 
 ### Exact and palette chips
 
@@ -86,7 +86,7 @@ A bounded scrollable drawer contains named swatches, minimum-area slider, camera
 
 ### Image-only masonry gallery
 
-Plain photo buttons preserve full orientation-aware proportions without captions or decorative cards. Selection opens details; double-click or Space opens preview. Arrow keys use spatial masonry navigation. Accessibility labels include filename and preview/original availability. Context actions provide Preview, Find Similar and Reveal Original in Finder. RAW+JPEG member switching preserves the logical gallery highlight while per-file metadata and organization remain distinct. These behaviors are source-defined and await revised native interaction review.
+Recycled AppKit collection items preserve full orientation-aware proportions without captions or decorative cards. Selection opens details; double-click or Space opens preview. Arrow keys use spatial masonry navigation. Accessibility labels include filename and preview/original availability. Context actions provide Preview, Find Similar and Reveal Original in Finder. RAW+JPEG member switching preserves the logical gallery highlight while per-file metadata and organization remain distinct. Native checks confirmed Down changes selection, Space opens preview and JPEG/NEF pair-member switching works. A 3,416-item logical gallery reached the bottom and remained responsive; an idle observation showed 0% CPU and approximately 258MiB RSS. These are bounded session observations, not a frame-rate benchmark or broad performance guarantee.
 
 ### Status, empty and failure states
 

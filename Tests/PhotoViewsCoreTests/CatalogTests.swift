@@ -8,6 +8,24 @@ final class CatalogTests {
         try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
     }
     func tearDownWithError() throws { try FileManager.default.removeItem(at:root) }
+    func testGalleryGeometry() throws {
+        let aspects = (0..<20000).map { [1.5,0.6666666667,1.0][ $0 % 3 ] }
+        let start = Date()
+        for width in [780.0,1180.0,1800.0] {
+            let result = GalleryGeometry.frames(aspects:aspects,width:width)
+            try expectEqual(result.frames.count,aspects.count)
+            var bottoms: [Double:Double] = [:]
+            for (i,frame) in result.frames.enumerated() {
+                try expectTrue(frame.minX >= 0 && frame.maxX <= width && frame.height > 0)
+                try expectTrue(abs(frame.width/frame.height-aspects[i]) < 0.000001)
+                try expectTrue(frame.minY >= (bottoms[frame.minX] ?? 0))
+                bottoms[frame.minX] = frame.maxY
+                try expectTrue(frame.maxY <= result.height)
+            }
+            try expectEqual(result.frames,GalleryGeometry.frames(aspects:aspects,width:width).frames)
+        }
+        print("PASS: 20,000-photo layouts at three widths preserve proportions, bounds, deterministic placement and no column overlap in \(Date().timeIntervalSince(start)) seconds (geometry only).")
+    }
     func testHumanApprovedQueryPlans() throws {
         let now = Date(timeIntervalSince1970:1767227400), zone = TimeZone(identifier:"Europe/Zagreb")!
         func parse(_ input: String) -> QueryPlan { QueryInterpreter.interpret(input,cameras:["NIKON Z f","NIKON Z 6"],lenses:[],formats:[],now:now,timezone:zone) }
@@ -203,7 +221,7 @@ enum CheckFailure: Error { case failed(String) }
 @main struct CatalogChecks {
     static func main() throws {
         let suite = CatalogTests()
-        for check in [suite.testPaletteLanguage, suite.testHumanApprovedQueryPlans, suite.testQueryInterpretation, suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testOrganizationPersistenceAndExplicitDecisions, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
+        for check in [suite.testGalleryGeometry, suite.testPaletteLanguage, suite.testHumanApprovedQueryPlans, suite.testQueryInterpretation, suite.testSourceIdentityAndBookmarkSurviveReopening, suite.testViewAndWorkspaceRecipeRoundTrip, suite.testGroupingIdentityUnknownAndDeterminism, suite.testSavedDefinitionSeparateFromDraftAndIdentityRestores, suite.testOrganizationPersistenceAndExplicitDecisions, suite.testBlankViewNameRejectedWithoutWriting, suite.testFutureSchemaRefusedWithoutDowngrade] {
             try suite.setUpWithError()
             do { try check(); try suite.tearDownWithError() }
             catch { try? suite.tearDownWithError(); throw error }

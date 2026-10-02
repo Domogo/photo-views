@@ -1,8 +1,8 @@
 # Main workspace — Quiet photo canvas
 
-Status: revised direction approved by the user, 2026-10-02; implementation and rendered verification in progress.
+Status: revised direction approved by the user, 2026-10-02; native implementation and capture checks completed; the reviewer scored both requested corrections resolved, with ship at the fix-list scope.
 Primary target: Sources/PhotoViewsApp/WorkspaceView.swift
-Related target: Sources/PhotoViewsApp/PhotoGrid.swift
+Related targets: Sources/PhotoViewsApp/PhotoGrid.swift, Sources/PhotoViewsApp/NativePhotoGallery.swift, Sources/PhotoViewsCore/GalleryGeometry.swift
 
 ## Scope and mode
 
@@ -22,7 +22,7 @@ Native macOS main workspace. Operate mode with photographs leading exploration. 
 
 ## Gallery and supporting panes
 
-- Full image proportions in lazy masonry columns; no cropping, filename, format or persistent overlay. Shortest-column placement packs space while preserving the ranking sequence used for placement.
+- Full image proportions in recycled AppKit collection-view masonry cells; no cropping, filename, format or persistent overlay. Shortest-column placement packs space while preserving the ranking sequence used for placement.
 - Orientation-aware proportions from recorded dimensions. Missing dimensions use a square placeholder until metadata is available.
 - Narrow gutters and adaptive columns. Portraits receive their full height rather than letterboxing inside landscape cells.
 - Sidebar is reachable from the native toolbar and remembers visibility. A photo selection opens the inspector; the toolbar can close it. Unselected source details are optional rather than permanent competition for image space.
@@ -39,8 +39,10 @@ Native macOS main workspace. Operate mode with photographs leading exploration. 
 
 ## Status and states
 
-Keep result and indexing counts on one small row. Expand indexing controls/failures only on demand. Incomplete palette coverage remains visible during palette search. Sources report disconnection; originals report their own availability in the inspector. No-match states retain exact constraints. Catalog/worker errors remain actionable. No information is removed merely to make a successful screenshot quieter.
+Keep result and indexing counts on one small row. Expand indexing controls/failures only on demand. Incomplete palette coverage remains visible during palette search. Sources report disconnection; originals report their own availability in the inspector. No-match states retain exact constraints. Queries awaiting approval or correction say Search not run; rejected queries never imply an empty executed search. Catalog/worker errors remain actionable. No information is removed merely to make a successful screenshot quieter.
 
 ## Verification
 
 Review actual native wide and compact windows in both appearances, default gallery, expanded filters, active palette, selection/paired inspector and blocked query states. Local checks must cover schema migration, old/new recipe decoding, palette persistence and invalidation, missing previews, offline originals, exact constraints and collapsed-pair selection. No web detector or proxy capture applies to SwiftUI/AppKit. Full accessibility and measured retrieval/performance remain separately scoped evidence.
+
+Native evidence 2026-10-02: wide/light and compact/dark captures in `.impeccable/review/canvas-*.png`; palette, filters, blocked query and paired inspector covered. Repeated deep scroll reaches the end of 3,416 logical photos and native AX remains responsive. Main-thread SwiftUI lazy-layout freeze replaced with deterministic geometry and off-main thumbnail decoding (512px, four workers, 64MiB/256-image cache). 20,000-photo geometry invariants pass at three widths; this is not a frame-rate benchmark. Space preview, spatial Down selection and JPEG/NEF member switching checked.
