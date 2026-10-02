@@ -36,6 +36,27 @@ func index(_ coordinator: IndexCoordinator, catalog: URL, cache: URL, source: Ca
 
 @main struct IndexChecks {
     static func main() throws {
+        if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--live-view" {
+            let root = URL(fileURLWithPath:CommandLine.arguments[2]), phase = CommandLine.arguments[3]
+            let photos = root.appendingPathComponent("Photos"), db = root.appendingPathComponent("catalog.sqlite")
+            try FileManager.default.createDirectory(at:photos,withIntermediateDirectories:true)
+            let store = try Catalog(url:db)
+            if phase == "setup" {
+                try fixture(photos.appendingPathComponent("matching-one.jpg"))
+                let source = try store.register(FolderAccess.source(for:photos))
+                try index(IndexCoordinator(),catalog:db,cache:root.appendingPathComponent("previews"),source:source)
+                var recipe = ViewRecipe(); recipe.sourceIDs = [source.id]; recipe.search = "matching"; recipe.searchMode = "filename"
+                recipe.filters.camera = "Fixture camera"; recipe.grouping = .month; recipe.sorting = .filename
+                try store.save(SavedView(name:"Matching photos",recipe:recipe))
+                recipe.search = ""; recipe.searchMode = "visual"; recipe.referenceAssetID = try store.indexedAssets()[0].id
+                recipe.modelVersion = "openclip-vit-b32-1a25a446712ba5ee05982a381eed697ef9b435cf:imageio-m2-v1:search-v1"; recipe.rankingVersion = "rrf-k60-v1"
+                try store.save(SavedView(name:"Similar fixture photos",recipe:recipe))
+            } else if phase == "add" {
+                try fixture(photos.appendingPathComponent("matching-two.jpg"))
+                try index(IndexCoordinator(),catalog:db,cache:root.appendingPathComponent("previews"),source:store.sources()[0])
+            } else { throw Failure(description:"Unknown live-view fixture phase") }
+            print("PASS: native live-view fixture phase "+phase); return
+        }
         if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--interrupt-worker" {
             let base = URL(fileURLWithPath:CommandLine.arguments[2])
             let db = base.appendingPathComponent("catalog.sqlite")

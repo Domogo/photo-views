@@ -181,6 +181,18 @@ public final class Catalog {
         }
         return results
     }
+    public func storeSelectedView(_ id: UUID?) throws {
+        let stmt = try statement("INSERT INTO workspace_state VALUES('selectedView',?) ON CONFLICT(key) DO UPDATE SET payload=excluded.payload")
+        defer { sqlite3_finalize(stmt) }; try bind(encoder.encode(id),to:1,in:stmt); try finish(stmt)
+    }
+    public func selectedView() throws -> UUID? {
+        let stmt = try statement("SELECT payload FROM workspace_state WHERE key='selectedView'")
+        defer { sqlite3_finalize(stmt) }
+        let step = sqlite3_step(stmt)
+        if step == SQLITE_DONE { return nil }
+        guard step == SQLITE_ROW else { throw failure() }
+        return try decoder.decode(UUID?.self,from:data(stmt,0))
+    }
     public func storeWorkspaceRecipe(_ recipe: ViewRecipe) throws {
         let stmt = try statement("INSERT INTO workspace_state VALUES('recipe',?) ON CONFLICT(key) DO UPDATE SET payload=excluded.payload")
         defer { sqlite3_finalize(stmt) }; try bind(encoder.encode(recipe),to:1,in:stmt); try finish(stmt)

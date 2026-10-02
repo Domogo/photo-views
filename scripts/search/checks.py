@@ -66,6 +66,36 @@ class SearchChecks(unittest.TestCase):
         visual=self.query({'referenceAssetID':'a','sourceIDs':['one'],'filters':{'camera':'Nikon'}})
         self.assertEqual(visual['assets'],[])
         self.assertEqual(visual['coverage']['embedded'],1)
+    def test_presentation_does_not_change_membership_or_rank(self):
+        for grouping in ('none','month','camera','folder'):
+            result=self.worker.handle({'protocol':1,'op':'query','mode':'visual','limit':100,'recipe':{'referenceAssetID':'a','grouping':grouping,'filters':{'camera':'Nikon'}}})
+            self.assertEqual([a['asset']['id'] for a in result['assets']],['b'])
+    def test_selected_identity_outside_page_and_removed_by_filter(self):
+        request={'protocol':1,'op':'query','mode':'filename','limit':1,'selectedAssetID':'d','recipe':{'sorting':'filename'}}
+        result=self.worker.handle(request)
+        self.assertEqual(result['selectedAsset']['asset']['id'],'d')
+        self.assertNotEqual(result['assets'][0]['asset']['id'],'d')
+        request['recipe']['filters']={'camera':'Nikon'}
+        self.assertIsNone(self.worker.handle(request)['selectedAsset'])
+    def test_live_saved_recipe_newly_ready_membership_and_reopen(self):
+        self.worker.db.execute('CREATE TABLE saved_views(id TEXT PRIMARY KEY, recipe BLOB)')
+        recipe={'search':'car','searchMode':'filename','sourceIDs':['one'],'filters':{'camera':'Nikon'},'grouping':'month','sorting':'filename','modelVersion':MODEL_VERSION,'rankingVersion':'rrf-k60-v1'}
+        self.worker.db.execute('INSERT INTO saved_views VALUES(?,?)',['view',json.dumps(recipe)]);self.worker.db.commit()
+        self.assertEqual(self.query(recipe)['resultCount'],1)
+        self.worker.db.execute("INSERT INTO assets VALUES('new','one','Japan/car-new.jpg',NULL,10,123,0)")
+        self.worker.db.execute("INSERT INTO metadata VALUES('new',?,123)",[json.dumps({'camera':'Nikon','captureDateText':'2025:11:08'}).encode()])
+        self.worker.db.execute("INSERT INTO index_jobs VALUES('new','one','new','preview','pending',NULL,'imageio-m2-v1',1)");self.worker.db.commit()
+        self.assertEqual(self.query(recipe)['resultCount'],1)
+        self.worker.db.execute("UPDATE index_jobs SET state='complete' WHERE asset_id='new'");self.worker.db.commit()
+        self.worker.db.close();self.worker=Worker(self.path,Path(self.tmp.name))
+        saved=json.loads(self.worker.db.execute("SELECT recipe FROM saved_views WHERE id='view'").fetchone()[0])
+        self.assertEqual(saved,recipe);self.assertEqual(self.query(saved)['resultCount'],2)
+    def test_saved_version_mismatch_requires_explicit_change(self):
+        for field in ('modelVersion','rankingVersion'):
+            recipe={'referenceAssetID':'a',field:'old-version'}
+            with self.assertRaisesRegex(ValueError,'different search model'):self.query(recipe)
+            self.assertEqual(recipe[field],'old-version')
+        self.assertEqual(self.query({'referenceAssetID':'a','modelVersion':MODEL_VERSION,'rankingVersion':'rrf-k60-v1'})['resultCount'],3)
     def test_invalid_protocol(self):
         with self.assertRaises(ValueError):self.worker.handle({'protocol':999,'op':'query'})
 

@@ -123,6 +123,9 @@ class Worker:
           LEFT JOIN index_jobs j ON j.asset_id=a.id AND j.stage='preview' AND j.pipeline_version='imageio-m2-v1'
           LEFT JOIN embeddings e ON e.asset_id=a.id AND e.model_version=? WHERE """ + ' AND '.join(clauses),[self.version]+args).fetchall()
         text = recipe.get('search','').strip(); mode = request.get('mode','visual'); reference = recipe.get('referenceAssetID')
+        if (reference or (text and mode != 'filename')) and (
+            recipe.get('modelVersion') not in (None, self.version) or recipe.get('rankingVersion') not in (None, RANKING_VERSION)):
+            raise ValueError('This view uses a different search model or ranking version. Use the current search model explicitly, then update the saved view if you want to keep the change.')
         by_id = {r['id']:r for r in rows}
         def lexical():
             matched = []
@@ -162,15 +165,18 @@ class Worker:
         # Semantic searches return nearest neighbors, not guaranteed matches. No probability claims.
         total = len(ranked)
         limit = min(10000,max(1,request.get('limit',500)))
+        eligible = set(ranked[:100] if searching and mode!='filename' else ranked)
         ranked = ranked[:min(limit,100) if searching and mode!='filename' else limit]
-        assets = []
-        for id in ranked:
+        def asset_payload(id):
             row=by_id[id]; metadata=json.loads(row['payload']) if row['payload'] else None
-            assets.append({'asset':{'id':id,'sourceID':row['source_id'],'relativePath':row['relative_path'],'fileID':row['file_id'],'byteSize':row['byte_size'],'modifiedAt':row['modified_at']-978307200 if row['modified_at'] is not None else None},'available':bool(row['available']), 'metadata':metadata,'thumbnailPath':row['thumbnail_path'],'analysisPath':row['analysis_path'],'pipelineVersion':row['pipeline_version'],'previewSource':row['preview_source'],'previewState':row['state'],'error':row['error']})
+            return {'asset':{'id':id,'sourceID':row['source_id'],'relativePath':row['relative_path'],'fileID':row['file_id'],'byteSize':row['byte_size'],'modifiedAt':row['modified_at']-978307200 if row['modified_at'] is not None else None},'available':bool(row['available']), 'metadata':metadata,'thumbnailPath':row['thumbnail_path'],'analysisPath':row['analysis_path'],'pipelineVersion':row['pipeline_version'],'previewSource':row['preview_source'],'previewState':row['state'],'error':row['error']}
+        assets = [asset_payload(id) for id in ranked]
+        selected = request.get('selectedAssetID')
+        selected_asset = asset_payload(selected) if selected in eligible else None
         source_clauses, source_args = constraints({'sourceIDs':recipe.get('sourceIDs',[])})
         where=' WHERE '+' AND '.join(source_clauses) if source_clauses else ''
         cameras = [r[0] for r in self.db.execute("SELECT DISTINCT json_extract(CAST(m.payload AS TEXT),'$.camera') FROM assets a JOIN metadata m ON m.asset_id=a.id"+where+(' AND ' if where else ' WHERE ')+"json_extract(CAST(m.payload AS TEXT),'$.camera') IS NOT NULL ORDER BY 1",source_args)]
-        return {'assets':assets,'resultCount':min(total,100) if searching and mode!='filename' else total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
+        return {'assets':assets,'selectedAsset':selected_asset,'resultCount':min(total,100) if searching and mode!='filename' else total,'candidateCount':total,'cameras':cameras, 'coverage':self.coverage(recipe),'modelVersion':self.version,'rankingVersion':RANKING_VERSION}
 
     def handle(self, request):
         if request.get('protocol') != PROTOCOL: raise ValueError('Unsupported worker protocol')
