@@ -32,6 +32,7 @@ public struct ExactFilters: Codable, Equatable {
 public struct ViewRecipe: Codable, Equatable {
     public var sourceIDs: [UUID] = []
     public var search = ""
+    public var searchMode: String?
     public var filters = ExactFilters()
     public var grouping: Grouping = .none
     public var sorting: PhotoSort = .captureNewest
