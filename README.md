@@ -6,7 +6,7 @@ Describe what you remember. Filter what you know. Group the results however you 
 
 ## Project state
 
-Implementation is starting with M0 feasibility checks. There is no finished app yet.
+M0 probes demonstrate native preview generation and local retrieval on this Mac; acceptance limitations are tracked in [M0_STATUS.md](M0_STATUS.md). There is no finished app yet.
 Target development/demo machine: Apple Silicon MacBook Pro (M5 Max, 48 GB).
 Broad RAW support is the goal; support claims require camera/variant fixtures, not extension lists.
 

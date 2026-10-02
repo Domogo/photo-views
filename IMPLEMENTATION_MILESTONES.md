@@ -1,6 +1,6 @@
 # Photo Views — Implementation Milestones
 
-Status: proposed implementation backlog, 2026-10-02. No milestone is implemented yet.
+Status: proposed implementation backlog, 2026-10-02. M0 implementation/evidence is tracked in [M0_STATUS.md](M0_STATUS.md); remaining milestones are not implemented.
 
 Authority: [prd.md](prd.md) for requirements, [PRODUCT.md](PRODUCT.md) for durable context, [DESIGN.md](DESIGN.md) for the selected Photo Workbench direction, and [.impeccable/surfaces/main-workspace.md](.impeccable/surfaces/main-workspace.md) for workspace behavior.
 

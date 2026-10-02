@@ -1,0 +1,12 @@
+[
+  {
+    "id": "visual-dog-beach",
+    "text": "a dog running on a beach",
+    "relevant": ["REPLACE_WITH_HUMAN_LABELED_ASSET_ID"]
+  },
+  {
+    "id": "similar-reference",
+    "asset": "REPLACE_WITH_REFERENCE_ASSET_ID",
+    "relevant": ["REPLACE_WITH_DIFFERENT_RELEVANT_ASSET_ID"]
+  }
+]
