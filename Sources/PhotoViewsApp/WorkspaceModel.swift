@@ -4,6 +4,12 @@ import PhotoViewsCore
 
 @MainActor final class WorkspaceModel: ObservableObject {
     @Published var sources: [CatalogSource] = []
+    @Published var collections: [CollectionRecord] = []
+    @Published var tagCoverage = TagCoverage(total:0,prepared:0)
+    @Published var tagVocabularyVersion: String?
+    @Published var selectedTags: [TagAssignmentRecord] = []
+    @Published var selectedCollections = Set<UUID>()
+    @Published var selectedFavorite = false
     @Published var savedViews: [SavedView] = []
     @Published var recipe = ViewRecipe()
     @Published var selectedSavedView: UUID?
@@ -54,6 +60,7 @@ import PhotoViewsCore
             catalog = store
             sources = try store.sources()
             savedViews = try store.savedViews()
+            collections = try store.collections()
             recipe = try store.workspaceRecipe()
             persistedRecipe = recipe
             if let id = try store.selectedView(), savedViews.contains(where:{ $0.id == id }) { selectedSavedView = id }
@@ -71,6 +78,8 @@ import PhotoViewsCore
     }
     var currentTitle: String {
         if let saved = savedViews.first(where:{$0.id == selectedSavedView}) { return saved.name }
+        if let collection = collections.first(where:{ $0.id == recipe.collectionID }) { return collection.name }
+        if recipe.favoritesOnly == true { return "Favorites" }
         if let selectedSource, recipe.sourceIDs.count == 1 { return selectedSource.name }
         return "All photos"
     }
@@ -102,10 +111,43 @@ import PhotoViewsCore
             refreshAssets()
         } catch { errorMessage = error.localizedDescription }
     }
-    func selectAll() { selectedSavedView = nil; recipe.sourceIDs = []; persistRecipe() }
-    func selectSource(_ source: CatalogSource) { selectedSavedView = nil; recipe.sourceIDs = [source.id]; persistRecipe() }
+    func selectAll() { selectedSavedView = nil; recipe.collectionID = nil; recipe.favoritesOnly = nil; recipe.sourceIDs = []; persistRecipe() }
+    func selectSource(_ source: CatalogSource) { selectedSavedView = nil; recipe.collectionID = nil; recipe.favoritesOnly = nil; recipe.sourceIDs = [source.id]; persistRecipe() }
     func selectView(_ view: SavedView) { selectedSavedView = view.id; assetLimit = 500; recipe = view.recipe; persistRecipe(); refreshAssets() }
 
+    func selectFavorites() { selectedSavedView = nil; recipe = ViewRecipe(); recipe.favoritesOnly = true; persistRecipe() }
+    func selectCollection(_ collection: CollectionRecord) { selectedSavedView = nil; recipe = ViewRecipe(); recipe.collectionID = collection.id; persistRecipe() }
+    @discardableResult func createCollection(name: String) -> Bool {
+        guard let catalog else { return false }
+        do { let collection = try catalog.createCollection(name:name); collections = try catalog.collections(); selectCollection(collection); return true }
+        catch { errorMessage = error.localizedDescription; return false }
+    }
+    func refreshSelectedOrganization() {
+        guard let catalog, let id = selectedAssetID else { selectedTags = []; selectedCollections = []; selectedFavorite = false; return }
+        do {
+            selectedTags = try catalog.tags(for:id); selectedCollections = try catalog.collectionIDs(for:id)
+            selectedFavorite = try catalog.isFavorite(id)
+        } catch { errorMessage = error.localizedDescription }
+    }
+    func setTagDecision(_ tag: TagAssignmentRecord, _ decision: TagDecision) {
+        do { try catalog?.setTagDecision(tag.id,decision:decision); refreshSelectedOrganization(); refreshAssets() }
+        catch { errorMessage = error.localizedDescription }
+    }
+    @discardableResult func addTag(_ name: String, replacing prior: UUID? = nil) -> Bool {
+        guard let catalog, let id = selectedAssetID else { return false }
+        do { try catalog.addManualTag(name,to:id,replacing:prior); refreshSelectedOrganization(); refreshAssets(); return true }
+        catch { errorMessage = error.localizedDescription; return false }
+    }
+    func toggleFavorite() {
+        guard let id = selectedAssetID else { return }
+        do { try catalog?.setFavorite(id,!selectedFavorite); selectedFavorite.toggle(); refreshAssets() }
+        catch { errorMessage = error.localizedDescription }
+    }
+    func toggleCollection(_ collection: CollectionRecord) {
+        guard let id = selectedAssetID else { return }
+        do { try catalog?.setMembership(id,collection:collection.id,member:!selectedCollections.contains(collection.id)); refreshSelectedOrganization(); refreshAssets() }
+        catch { errorMessage = error.localizedDescription }
+    }
     func chooseFolder(reauthorizing source: CatalogSource? = nil) {
         let panel = NSOpenPanel()
         panel.title = source == nil ? "Add a photo folder" : "Restore folder access"
@@ -267,7 +309,10 @@ import PhotoViewsCore
                 switch response {
                 case .success(let result):
                     self.searchError = nil
+                    self.tagCoverage = result.tagCoverage ?? TagCoverage(total:0,prepared:0)
+                    self.tagVocabularyVersion = result.tagVersion
                     self.assets = result.assets.map { self.normalizeCache($0) }
+                    self.refreshSelectedOrganization()
                     self.resultCount = result.resultCount; self.cameras = result.cameras; self.visualCoverage = result.coverage
                     if let id = self.selectedAssetID {
                         if let selected = self.assets.first(where:{ $0.id == id }) { self.retainedSelection = selected }
@@ -275,6 +320,7 @@ import PhotoViewsCore
                         else if let selected = result.selectedAsset, selected.id == id { self.retainedSelection = self.normalizeCache(selected) }
                         else { self.selectedAssetID = nil; self.retainedSelection = nil; self.previewPresented = false }
                     }
+                    self.refreshSelectedOrganization()
                 case .failure(let error):
                     self.searchError = error.localizedDescription; self.assets = []; self.resultCount = 0
                 }
@@ -353,6 +399,7 @@ import PhotoViewsCore
     func selectAsset(_ id: UUID) {
         selectedAssetID = id
         retainedSelection = assets.first { $0.id == id } ?? (try? catalog?.indexedAssets(limit:1,assetID:id).first)
+        refreshSelectedOrganization()
         try? catalog?.touchPreviews([id])
     }
     func originalAvailable(_ asset: IndexedAsset) -> Bool { asset.available && availability[asset.asset.sourceID] == "Connected" }

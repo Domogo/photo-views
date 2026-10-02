@@ -11,9 +11,12 @@ struct WorkspaceView: View {
     @ObservedObject var model: WorkspaceModel
     @State private var sidebarVisible = true
     @State private var saving = false
+    @State private var creatingCollection = false
+    @State private var collectionName = ""
     @State private var viewName = ""
     @State private var filtersVisible = false
     @State private var indexingDetails = false
+    @State private var confirmedTagDraft = ""
     private let timer = Timer.publish(every:15,on:.main,in:.common).autoconnect()
 
     var body: some View {
@@ -54,16 +57,22 @@ struct WorkspaceView: View {
             Button("OK",role:.cancel) { model.errorMessage = nil }
         } message: { Text(model.errorMessage ?? "") }
         .sheet(isPresented:$saving) { SaveLiveViewSheet(model:model,saving:$saving,viewName:$viewName) }
+        .sheet(isPresented:$creatingCollection) { CreateCollectionSheet(model:model,presented:$creatingCollection,name:$collectionName) }
         .sheet(isPresented:$model.previewPresented) { PhotoPreview(model:model) }
     }
     private var sidebarSelection: Binding<String?> {
         Binding(get: {
             if let id = model.selectedSavedView { return "view:\(id.uuidString)" }
+            if let id = model.recipe.collectionID { return "collection:\(id.uuidString)" }
+            if model.recipe.favoritesOnly == true { return "favorites" }
             if let id = model.recipe.sourceIDs.first { return "source:\(id.uuidString)" }
             return "all"
         }, set: { value in
             guard let value else { return }
             if value == "all" { model.selectAll() }
+            else if value == "favorites" { model.selectFavorites() }
+            else if value == "newCollection" { collectionName = ""; creatingCollection = true }
+            else if let collection = model.collections.first(where:{ "collection:\($0.id.uuidString)" == value }) { model.selectCollection(collection) }
             else if let source = model.sources.first(where: { "source:\($0.id.uuidString)" == value }) { model.selectSource(source) }
             else if let view = model.savedViews.first(where: { "view:\($0.id.uuidString)" == value }) { model.selectView(view) }
         })
@@ -71,6 +80,7 @@ struct WorkspaceView: View {
     private var sidebar: some View {
         List(selection: sidebarSelection) {
             Label("All photos",systemImage:"photo.on.rectangle").tag("all")
+            Label("Favorites",systemImage:"heart").tag("favorites")
             Section("Sources") {
                 if model.sources.isEmpty { Text("No folders added").foregroundStyle(.secondary) }
                 ForEach(model.sources) { source in
@@ -98,7 +108,10 @@ struct WorkspaceView: View {
                 }
             }
             Section("Collections") {
-                Text("No collections yet").foregroundStyle(.secondary)
+                ForEach(model.collections) { collection in
+                    Label(collection.name,systemImage:"square.stack").tag("collection:\(collection.id.uuidString)")
+                }
+                Button { collectionName = ""; creatingCollection = true } label: { Label("New Collection…",systemImage:"plus") }.tag("newCollection").disabled(!model.isReady)
             }
         }
         .buttonStyle(.plain)
@@ -137,14 +150,14 @@ struct WorkspaceView: View {
                         }
                     }.fixedSize().help("Choose visual descriptions or literal filename and keyword matching")
                 }
-                Text(model.searchMode == "visual" ? "Try “cars at night” or “a mountain lake”. Results are ranked by visual similarity." : "Matches filenames, folder paths and imported keywords.")
+                Text(model.searchMode == "visual" ? "Try “cars at night” or “a mountain lake”. Results are ranked by visual similarity." : "Matches filenames, folder paths and tags, including unconfirmed suggestions.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             }
             HStack(spacing:8) {
                 Button { filtersVisible.toggle() } label: { Label(filtersVisible ? "Hide Filters" : model.hasFilters ? "Filters •" : "Filters",systemImage:"line.3.horizontal.decrease") }
                 Menu(model.recipe.grouping == .none ? "View" : "View · \(model.recipe.grouping.title)") {
                     Picker("Group by",selection:$model.recipe.grouping) {
-                        ForEach(Grouping.allCases.filter { $0 != .subject }) { Text($0.title).tag($0) }
+                        ForEach(Grouping.allCases) { Text($0.title).tag($0) }
                     }
                     Picker("Sort",selection:$model.recipe.sorting) {
                         ForEach(PhotoSort.allCases.filter { $0 != .relevance }) { Text($0.title).tag($0) }
@@ -203,8 +216,20 @@ struct WorkspaceView: View {
                 if model.recipe.filters.toDate != nil { DatePicker("Through date",selection:Binding(get:{ model.recipe.filters.toDate ?? Date() },set:{ model.recipe.filters.toDate = $0 }),displayedComponents:.date) }
                 Text("Uses dates recorded by the camera. Unknown dates are excluded when a date filter is active.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             }
-            Button("Clear All Filters") { model.clearFilters() }.disabled(!model.hasFilters)
+            VStack(alignment:.leading,spacing:8) {
+                Text("Confirmed tags").font(.subheadline)
+                TextField("Comma-separated tags",text:$confirmedTagDraft)
+                    .onAppear { confirmedTagDraft = model.recipe.filters.confirmedTags.joined(separator:", ") }
+                    .onSubmit { applyConfirmedTags() }
+                    .textFieldStyle(.roundedBorder).accessibilityLabel("Confirmed tags, all required")
+                Button("Apply Tags") { applyConfirmedTags() }
+                Text("Every tag must be confirmed. Suggestions do not satisfy this filter.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+            }
+            Button("Clear All Filters") { confirmedTagDraft = ""; model.clearFilters() }.disabled(!model.hasFilters)
         }.padding(20).frame(width:320)
+    }
+    private func applyConfirmedTags() {
+        model.recipe.filters.confirmedTags = Array(Set(confirmedTagDraft.split(separator:",").map { $0.trimmingCharacters(in:.whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty })).sorted()
     }
     @ViewBuilder private var content: some View {
         if !model.isReady {
@@ -222,6 +247,10 @@ struct WorkspaceView: View {
             }
         } else if model.assets.isEmpty && model.searching {
             emptyState(icon:"magnifyingglass",title:"Loading photos…",detail:"Preparing your local results.") { ProgressView().controlSize(.small) }
+        } else if model.assets.isEmpty && (model.recipe.collectionID != nil || model.recipe.favoritesOnly == true) && !model.hasSearch && !model.hasFilters {
+            emptyState(icon:model.recipe.favoritesOnly == true ? "heart" : "square.stack",title:model.recipe.favoritesOnly == true ? "No favorites yet" : "This collection is empty",detail:"Select a photo in All photos and add it using the details sidebar. Manual collections keep only the photos you choose.") {
+                Button("Browse All Photos") { model.selectAll() }
+            }
         } else if model.assets.isEmpty && (model.hasSearch || model.hasFilters) {
             emptyState(icon:"magnifyingglass",title:model.searching ? "Searching photos…" : "No matching photos",detail:model.isRankedSearch && model.visualCoverage.total > 0 && model.visualCoverage.embedded == 0 ? "Visual indexing needs to finish some photos first. You can use Filename search now." : "Try another search or edit the filters. Your filters have not been relaxed.") {
                 if model.hasFilters { Button("Clear Filters") { model.clearFilters() } }
@@ -297,6 +326,7 @@ struct WorkspaceView: View {
                             Spacer()
                             Button(model.visualIndexing ? (model.visualPaused ? "Pausing…" : "Pause Visual Indexing") : "Build Visual Index") { if model.visualIndexing { model.pauseVisualIndexing() } else { model.startVisualIndexing() } }.disabled(model.visualIndexing && model.visualPaused)
                         }
+                        Text("Suggested tags prepared: \(model.tagCoverage.prepared) of \(model.tagCoverage.total)").font(.caption).foregroundStyle(.secondary)
                         if model.visualCoverage.failed > 0 {
                             Text("\(model.visualCoverage.failed) photos need attention").font(.caption)
                             ForEach(model.visualCoverage.failures ?? [],id:\.assetID) { failure in
@@ -325,9 +355,18 @@ struct WorkspaceView: View {
             Text(asset.filename).font(.body.weight(.medium)).textSelection(.enabled)
             CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0)).frame(height:128)
             Button("Open Preview") { model.previewPresented = true }
+            Button { model.toggleFavorite() } label: { Label(model.selectedFavorite ? "Remove Favorite" : "Favorite",systemImage:model.selectedFavorite ? "heart.fill" : "heart") }
+            Menu("Collections") {
+                if model.collections.isEmpty { Text("Create a collection in the sidebar") }
+                ForEach(model.collections) { collection in
+                    Button { model.toggleCollection(collection) } label: { if model.selectedCollections.contains(collection.id) { Label(collection.name,systemImage:"checkmark") } else { Text(collection.name) } }
+                }
+            }
             Button("Find Similar") { model.findSimilar() }
                 .disabled(model.visualCoverage.embedded == 0)
             Button("Reveal Original in Finder") { model.revealPhoto() }
+            PhotoTags(model:model)
+            Divider()
             LabeledContent("Original",value:model.originalAvailable(asset) ? "Available" : asset.available ? "Drive disconnected" : "Missing")
             if let metadata = asset.metadata {
                 LabeledContent("Camera",value:metadata.camera ?? "Unknown")
@@ -372,4 +411,58 @@ private struct SaveLiveViewSheet: View {
             }
         }.padding(24).frame(width:400)
     }
+}
+
+private struct CreateCollectionSheet: View {
+    @ObservedObject var model: WorkspaceModel
+    @Binding var presented: Bool
+    @Binding var name: String
+    var body: some View {
+        VStack(alignment:.leading,spacing:20) {
+            Text("New collection").font(.title3.weight(.semibold))
+            Text("A manual collection contains only photos you add. Originals stay in their folders.").font(.caption).foregroundStyle(.secondary)
+            TextField("Collection name",text:$name).textFieldStyle(.roundedBorder)
+            HStack { Button("Cancel",role:.cancel) { presented = false }.keyboardShortcut(.cancelAction); Spacer()
+                Button("Create Collection") { if model.createCollection(name:name) { presented = false } }.keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+            }
+        }.padding(24).frame(width:400)
+    }
+}
+private struct PhotoTags: View {
+    @ObservedObject var model: WorkspaceModel
+    @State private var draft = ""
+    @State private var replacing: UUID?
+    private var confirmed: [TagAssignmentRecord] { model.selectedTags.filter(\.isConfirmed) }
+    private var suggested: [TagAssignmentRecord] { model.selectedTags.filter { model.tagVocabularyVersion != nil && $0.provenance == .suggested && $0.decision == .unconfirmed && $0.vocabularyVersion == model.tagVocabularyVersion } }
+    var body: some View {
+        VStack(alignment:.leading,spacing:12) {
+            Text("Confirmed tags").font(.subheadline.weight(.semibold))
+            if confirmed.isEmpty { Text("No confirmed tags").font(.caption).foregroundStyle(.secondary) }
+            ForEach(confirmed) { tag in
+                HStack { Text(tag.tag).lineLimit(1); Spacer(minLength:0)
+                    Button { draft = tag.tag; replacing = tag.id } label: { Image(systemName:"pencil") }.accessibilityLabel("Edit confirmed tag \(tag.tag)")
+                    Button { model.setTagDecision(tag,.rejected) } label: { Image(systemName:"minus.circle") }.accessibilityLabel("Remove confirmed tag \(tag.tag)")
+                }
+            }
+            HStack(spacing:8) {
+                TextField(replacing == nil ? "Add a tag" : "Edit tag",text:$draft).textFieldStyle(.roundedBorder).onSubmit { saveTag() }
+                Button(replacing == nil ? "Add" : "Save") { saveTag() }.disabled(draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+            }
+            if replacing != nil { Button("Cancel Edit") { replacing = nil; draft = "" }.font(.caption) }
+            Text("Suggested tags").font(.subheadline.weight(.semibold)).padding(.top,4)
+            Text("Local model suggestions. Confirm only what you can see.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+            if suggested.isEmpty { Text("No suggestions yet, or none passed the cutoff.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
+            ForEach(suggested) { tag in
+                VStack(alignment:.leading,spacing:6) {
+                    Text(tag.tag).font(.body)
+                    HStack(spacing:8) {
+                        Button("Accept") { model.setTagDecision(tag,.accepted) }.accessibilityLabel("Accept suggested tag \(tag.tag)")
+                        Button("Reject") { model.setTagDecision(tag,.rejected) }.accessibilityLabel("Reject suggested tag \(tag.tag)")
+                        Button("Edit") { draft = tag.tag; replacing = tag.id }.accessibilityLabel("Edit suggested tag \(tag.tag)")
+                    }
+                }.help("Cosine similarity \(tag.score?.formatted(.number.precision(.fractionLength(3))) ?? "unknown"); cutoff \(tag.threshold?.formatted(.number.precision(.fractionLength(3))) ?? "unknown"). This is not a probability.")
+            }
+        }.onChange(of:model.selectedAssetID) { _,_ in draft = ""; replacing = nil }
+    }
+    private func saveTag() { if model.addTag(draft,replacing:replacing) { draft = ""; replacing = nil } }
 }

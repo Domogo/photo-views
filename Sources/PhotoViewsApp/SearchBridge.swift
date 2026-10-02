@@ -3,7 +3,10 @@ import PhotoViewsCore
 
 struct SearchFailure: Decodable { var assetID: UUID; var filename: String; var error: String }
 struct SearchCoverage: Decodable { var total: Int; var embedded: Int; var failed: Int; var failures: [SearchFailure]? = nil }
+struct TagCoverage: Decodable { var total: Int; var prepared: Int }
 struct SearchResult: Decodable {
+    var tagCoverage: TagCoverage?
+    var tagVersion: String?
     var assets: [IndexedAsset]
     var selectedAsset: IndexedAsset?
     var resultCount: Int

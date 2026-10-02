@@ -1,6 +1,6 @@
 # Photo Views — Implementation Milestones
 
-Status: implementation backlog, 2026-10-02. M0–M4 implementation and bounded evidence are tracked in their status documents; M5–M8 remain unimplemented. M4 is recorded in [M4_STATUS.md](M4_STATUS.md).
+Status: implementation backlog, 2026-10-02. M0–M5 implementation and bounded evidence are tracked in their status documents; M6–M8 remain unimplemented. M5 is recorded in [M5_STATUS.md](M5_STATUS.md).
 
 Authority: [prd.md](prd.md) for requirements, [PRODUCT.md](PRODUCT.md) for durable context, [DESIGN.md](DESIGN.md) for the selected Photo Workbench direction, and [.impeccable/surfaces/main-workspace.md](.impeccable/surfaces/main-workspace.md) for workspace behavior.
 

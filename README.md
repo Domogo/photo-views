@@ -35,11 +35,11 @@ Use `--release` for an optimized build. The script creates an ad-hoc signed deve
 
 The catalog is stored in `~/Library/Application Support/Photo Views/catalog.sqlite`. `PHOTO_VIEWS_DATA_DIR` overrides its directory for isolated local checks. Previews are stored in `~/Library/Caches/PhotoViews/previews` with a 2 GiB disk budget; an isolated data-directory override also isolates its preview cache. Sources stay in their existing folders. App builds, catalogs, photos, previews, model weights, and probe output are excluded from Git.
 
-[M1 status](M1_STATUS.md), [M2 status](M2_STATUS.md), [M3 status](M3_STATUS.md), and [M4 status](M4_STATUS.md) record implemented behavior and validation. [Prism learnings](REFERENCE_LEARNINGS.md) connects reference observations to upcoming milestones.
+[M1 status](M1_STATUS.md), [M2 status](M2_STATUS.md), [M3 status](M3_STATUS.md), [M4 status](M4_STATUS.md), and [M5 status](M5_STATUS.md) record implemented behavior and validation. [Prism learnings](REFERENCE_LEARNINGS.md) connects reference observations to upcoming milestones.
 
 ## Search on this Mac
 
-Type a description such as “cars at night” in the **Visual** search field. Switch its mode to **Filename** for filenames, folder paths or imported keywords. **Filters** expands camera, folder and inclusive capture-date constraints; the applied constraints remain visible after closing it. **View** contains grouping, sorting and saved-view actions. Select a photo and choose **Find Similar**; **Exit Similar** returns to browsing while retaining filters.
+Type a description such as “cars at night” in the **Visual** search field. Switch its mode to **Filename** for filenames, folder paths or tags, including unconfirmed model suggestions. **Filters** expands camera, folder and inclusive capture-date constraints; the applied constraints remain visible after closing it. **View** contains grouping, sorting and saved-view actions. Select a photo and choose **Find Similar**; **Exit Similar** returns to browsing while retaining filters.
 
 The coverage disclosure shows which photos have visual embeddings and exposes separate preview/visual indexing controls. Visual searches return up to 100 nearest candidates, not guaranteed matches or confidence percentages. Exact filters are never broadened. Filename search also works for indexed photos without visual embeddings.
 
@@ -54,3 +54,5 @@ Run retrieval invariants using the configured Python environment:
 The local default on this development Mac is `~/Library/Caches/PhotoViews/m0/venv/bin/python`. Real-fixture probe arguments and the evidence/limitations are recorded in [M3 status](M3_STATUS.md).
 
 M4 adds live saved views: use **View → Group by** to regroup the current results, then **Save View…**. **Unsaved changes** marks edits; **Update View** stores them and **Revert Changes** restores the saved recipe. **Refresh Results** checks current membership. Saved views include new matching indexed photos automatically and survive relaunch, including any unsaved draft.
+
+M5 adds **View → Group by → Primary subject**, with suggested groups labeled explicitly and an Unknown subject bucket. In the details sidebar, accept/reject/edit suggestions or add custom confirmed tags. **Filters → Confirmed tags → Apply Tags** requires every listed tag to be confirmed; separate names with commas. **Favorite** adds the selected asset to Favorites. Create a manual collection in the sidebar, then use the selected photo’s **Collections** menu to toggle membership. Collections store explicit choices; saved views store live recipes. Decisions stay in the catalog and survive restart/reindexing, without writing metadata to originals. The starter vocabulary is people, animals, cars, buildings, food, mountains, water, and vegetation. Local calibration evidence and remaining accuracy limits are in [M5 status](M5_STATUS.md).
