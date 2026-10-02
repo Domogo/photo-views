@@ -36,6 +36,34 @@ func index(_ coordinator: IndexCoordinator, catalog: URL, cache: URL, source: Ca
 
 @main struct IndexChecks {
     static func main() throws {
+        if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--m7-volume" {
+            let root = URL(fileURLWithPath:CommandLine.arguments[2]), folder = URL(fileURLWithPath:CommandLine.arguments[3])
+            let db = root.appendingPathComponent("catalog.sqlite"), store = try Catalog(url:db)
+            let source = try store.sources().first ?? store.register(FolderAccess.source(for:folder))
+            var fallback = source; fallback.bookmark = Data("invalidated bookmark".utf8); fallback.lastKnownPath = "/Volumes/Old Mount/Photos"
+            try check(try FolderAccess.resolve(fallback).url.standardizedFileURL == folder.standardizedFileURL,"Mounted volume UUID fallback failed")
+            try index(IndexCoordinator(),catalog:db,cache:root.appendingPathComponent("previews"),source:source)
+            if try store.savedViews().isEmpty {
+                var recipe = ViewRecipe(); recipe.sourceIDs = [source.id]; recipe.search = "DSC_0105"; recipe.searchMode = "filename"; recipe.grouping = .month
+                try store.save(SavedView(name:"Live paired photos",recipe:recipe)); try store.storeWorkspaceRecipe(recipe)
+                for member in try store.indexedAssets() { try store.addManualTag("cars",to:member.id) }
+            }
+            print("Volume integration:",try store.progress()[0].state,"assets",try store.indexedAssets().count,"pair members",try store.pairMembers(store.indexedAssets()[0].id).count)
+            return
+        }
+        if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--m7-archive" {
+            let store = try Catalog(url:URL(fileURLWithPath:CommandLine.arguments[2]))
+            for source in try store.sources() {
+                do { print("Resolved source:",try FolderAccess.resolve(source).url.path) } catch { print("Resolution error:",error) }
+                try store.reconcilePairs(sourceID:source.id)
+                let all = try store.indexedAssets(sourceIDs:[source.id],limit:Int.max)
+                var ids = Set<UUID>(), pair: [IndexedAsset] = []
+                for asset in all { let members = try store.pairMembers(asset.id); if members.count == 2 { ids.insert(members.map(\.id).sorted { $0.uuidString < $1.uuidString }[0]); if pair.isEmpty { pair = members } } }
+                print("Actual cached associations:",ids.count)
+                for member in pair { let url = URL(fileURLWithPath:source.lastKnownPath).appendingPathComponent(member.asset.relativePath); print(member.asset.relativePath,"SHA256",try ImagePipeline.hash(url)) }
+            }
+            return
+        }
         if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--live-view" {
             let root = URL(fileURLWithPath:CommandLine.arguments[2]), phase = CommandLine.arguments[3]
             let photos = root.appendingPathComponent("Photos"), db = root.appendingPathComponent("catalog.sqlite")

@@ -218,15 +218,19 @@ import PhotoViewsCore
                 else {
                     availability[source.id] = "Connected"
                     let wasDisconnected = priorAvailability[source.id] != nil && priorAvailability[source.id] != "Connected"
-                    let interrupted = indexProgress.contains { $0.sourceID == source.id && ["disconnected","discovering","indexing"].contains($0.state) }
-                    if rescanOnReconnect && (wasDisconnected || (priorAvailability[source.id] == nil && interrupted)) { reconnected.append(source) }
+                    let interrupted = indexProgress.contains { $0.sourceID == source.id && ["disconnected","discovering","indexing","complete"].contains($0.state) }
+                    let movedMount = resolution.url.path != source.lastKnownPath
+                    if rescanOnReconnect && (wasDisconnected || movedMount || (priorAvailability[source.id] == nil && interrupted)) { reconnected.append(source) }
                 }
                 if exists && (resolution.stale || resolution.url.path != source.lastKnownPath) {
-                    let refreshed = try FolderAccess.source(for:resolution.url)
-                    _ = try catalog.register(CatalogSource(id:source.id,name:source.name,bookmark:refreshed.bookmark,
-                        volumeID:refreshed.volumeID,relativePath:refreshed.relativePath,lastKnownPath:resolution.url.path,createdAt:source.createdAt))
+                    let refreshed = try? FolderAccess.source(for:resolution.url)
+                    _ = try catalog.register(CatalogSource(id:source.id,name:source.name,bookmark:refreshed?.bookmark ?? source.bookmark,
+                        volumeID:source.volumeID,relativePath:source.relativePath,lastKnownPath:resolution.url.path,createdAt:source.createdAt))
                 }
-            } catch { availability[source.id] = "Access needed" }
+            } catch { availability[source.id] = FolderAccess.isVolumeMounted(source) == false ? "Disconnected" : "Access needed" }
+            if availability[source.id] != "Connected", priorAvailability[source.id] != availability[source.id] {
+                do { try catalog.markSourceUnavailable(source.id) } catch { errorMessage = error.localizedDescription }
+            }
         }
         do { sources = try catalog.sources() } catch { errorMessage = error.localizedDescription }
         if priorAvailability != availability { refreshAssets() }
@@ -276,7 +280,7 @@ import PhotoViewsCore
         case "indexing": return "\(p.completed) of \(p.total) previews"
         case "paused": return "Paused · \(p.completed) of \(p.total)"
         case "failed": return "Scan needs attention"
-        default: return p.total == 0 ? "Ready to index" : "\(p.total) photos"
+        default: return p.total == 0 ? "Ready to index" : "\(p.total) files"
         }
     }
     var hasSearch: Bool { !recipe.search.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || recipe.referenceAssetID != nil }
@@ -437,6 +441,11 @@ import PhotoViewsCore
         refreshSelectedOrganization()
         try? catalog?.touchPreviews([id])
     }
+    func isGallerySelection(_ asset: IndexedAsset) -> Bool {
+        guard let id = selectedAssetID else { return false }
+        return asset.id == id || (recipe.collapsePairs != false && asset.pairedAssetIDs?.contains(id) == true)
+    }
+    var selectedGalleryID: UUID? { assets.first(where:{ isGallerySelection($0) })?.id }
     var selectedPairMembers: [IndexedAsset] {
         guard let id = selectedAssetID else { return [] }
         return ((try? catalog?.pairMembers(id)) ?? []).map { normalizeCache($0) }

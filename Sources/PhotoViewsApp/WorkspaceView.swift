@@ -407,7 +407,7 @@ struct WorkspaceView: View {
                 Text("RAW + JPEG").font(.subheadline.weight(.semibold))
                 ForEach(model.selectedPairMembers) { member in
                     Button { model.selectAsset(member.id) } label: {
-                        HStack { Text(member.filename); Spacer(); if member.id == asset.id { Image(systemName:"checkmark") } }
+                        HStack { Text(member.filename).lineLimit(1); Spacer(); Text(model.originalAvailable(member) ? "Available" : "Offline").font(.caption).foregroundStyle(.secondary); if member.id == asset.id { Image(systemName:"checkmark") } }
                     }.help("Inspect this member’s metadata, tags and original")
                 }
                 Text("Metadata, tags, favorites and collection membership belong to the selected file.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)

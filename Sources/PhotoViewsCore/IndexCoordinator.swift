@@ -68,10 +68,10 @@ public final class IndexCoordinator: @unchecked Sendable {
                 let normalized = url.standardizedFileURL.resolvingSymlinksInPath()
                 guard normalized.path.hasPrefix(root.path+"/") else { continue }
                 let path = String(normalized.path.dropFirst(root.path.count+1))
-                let fileID: String?
-                if let data = v.fileResourceIdentifier as? Data { fileID = data.base64EncodedString() }
-                else if let number = v.fileResourceIdentifier as? NSNumber { fileID = number.stringValue }
-                else { fileID = nil }
+                // Foundation's opaque resource identifier can include a mount-specific device value.
+                // The inode is stable across remounts and is namespaced by the source's volume identity.
+                let attributes = try FileManager.default.attributesOfItem(atPath:normalized.path)
+                let fileID = (attributes[.systemFileNumber] as? NSNumber).map { "inode-v1:"+$0.stringValue }
                 try store.discover(source:source,root:root,relativePath:path,fileID:fileID,size:Int64(v.fileSize ?? 0),modified:v.contentModificationDate.map { Date(timeIntervalSince1970:($0.timeIntervalSince1970*1000).rounded()/1000) },token:token,hash:{ try ImagePipeline.hash(url) })
             } catch { enumerationError = error }
             changed(false)

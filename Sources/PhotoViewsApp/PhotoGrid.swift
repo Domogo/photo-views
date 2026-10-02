@@ -59,7 +59,7 @@ struct PhotoGrid: View {
                                         CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0))
                                             .frame(maxWidth:.infinity).frame(height:128)
                                             .background(Color(nsColor:.controlBackgroundColor))
-                                            .overlay { if model.selectedAssetID == asset.id { Rectangle().strokeBorder(Color.accentColor,lineWidth:2) } }
+                                            .overlay { if model.isGallerySelection(asset) { Rectangle().strokeBorder(Color.accentColor,lineWidth:2) } }
                                             .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
@@ -87,7 +87,7 @@ struct PhotoGrid: View {
                     visibleAnchor = positions.filter { $0.value > 0 }.min { a,b in a.value == b.value ? a.key.uuidString < b.key.uuidString : a.value < b.value }?.key
                 }
                 .onChange(of:model.recipe.grouping) { _,_ in
-                    if let id = model.selectedAssetID ?? visibleAnchor, model.assets.contains(where:{ $0.id == id }) { scroll.scrollTo(id,anchor:.center) }
+                    if let id = model.selectedGalleryID ?? visibleAnchor, model.assets.contains(where:{ $0.id == id }) { scroll.scrollTo(id,anchor:.center) }
                 }
                 .focusable().focusEffectDisabled().focused($focused)
                 .onKeyPress(.space) { guard model.selectedAsset != nil else { return .ignored }; model.previewPresented = true; return .handled }
@@ -101,7 +101,7 @@ struct PhotoGrid: View {
     private func move(_ offset: Int, scroll: ScrollViewProxy) {
         let ordered = groups.flatMap { $0.assets }
         guard !ordered.isEmpty else { return }
-        let current = ordered.firstIndex { $0.id == model.selectedAssetID } ?? (offset > 0 ? -1 : ordered.count)
+        let current = ordered.firstIndex { model.isGallerySelection($0) } ?? (offset > 0 ? -1 : ordered.count)
         let next = ordered[max(0,min(ordered.count-1,current+offset))]
         model.selectAsset(next.id); scroll.scrollTo(next.id,anchor:.center)
     }

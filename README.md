@@ -58,3 +58,11 @@ M4 adds live saved views: use **View → Group by** to regroup the current resul
 M5 adds **View → Group by → Primary subject**, with suggested groups labeled explicitly and an Unknown subject bucket. In the details sidebar, accept/reject/edit suggestions or add custom confirmed tags. **Filters → Confirmed tags → Apply Tags** requires every listed tag to be confirmed; separate names with commas. **Favorite** adds the selected asset to Favorites. Create a manual collection in the sidebar, then use the selected photo’s **Collections** menu to toggle membership. Collections store explicit choices; saved views store live recipes. Decisions stay in the catalog and survive restart/reindexing, without writing metadata to originals. The starter vocabulary is people, animals, cars, buildings, food, mountains, water, and vegetation. Local calibration evidence and remaining accuracy limits are in [M5 status](M5_STATUS.md).
 
 M6 expands **Filters → More metadata** with lens, format, ISO, f-number, shutter seconds and original dimensions. In Visual mode, **Interpret** reviews supported clauses such as `cars at night camera:"NIKON Z f" folder:Japan iso<=200 group by month`. **Apply Plan** keeps the visual intent, applies exact constraints and opens their editable controls. Unknown/ambiguous and unsupported directives block application; Syntax Help explains the bounded grammar. Full syntax and acceptance limits are in [M6 status](M6_STATUS.md).
+
+## Drive recovery and RAW+JPEG pairs
+
+Search and cached previews stay usable when a photo drive is disconnected. Reconnection queues a safe rescan; mount-path changes are resolved by volume identity, and Restore Access remains available for lost permissions. Originals are read-only.
+
+View → Collapse RAW + JPEG shows qualifying pairs once. Click a photo and choose either file in Details to inspect its own metadata, tags and availability. Separate Pair survives rescans; View → Restore Automatic Pairs reverses separation in the current source scope. Exact filters apply to each file before pairs collapse. Indexing coverage counts files; the collapsed gallery counts logical photos.
+
+M7 implementation and measured limits: [M7_STATUS.md](M7_STATUS.md).

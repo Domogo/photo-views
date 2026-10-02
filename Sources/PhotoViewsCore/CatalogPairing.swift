@@ -40,7 +40,7 @@ extension Catalog {
             guard raw.count == 1, jpeg.count == 1, let a = raw[0].metadata, let b = jpeg[0].metadata,
                   let camera = a.camera?.trimmingCharacters(in:.whitespacesAndNewlines), !camera.isEmpty, camera == b.camera?.trimmingCharacters(in:.whitespacesAndNewlines),
                   let capture = a.captureDateText, capture == b.captureDateText, let date = fmt.date(from:capture), fmt.string(from:date) == capture,
-                  a.captureTimezone == b.captureTimezone else { continue }
+                  (a.captureTimezone == nil || b.captureTimezone == nil || a.captureTimezone == b.captureTimezone) else { continue }
             let ids = [raw[0].id.uuidString,jpeg[0].id.uuidString].sorted()
             let stmt = try statement("SELECT 1 FROM pair_exclusions WHERE first_asset_id=? AND second_asset_id=?"); defer { sqlite3_finalize(stmt) }
             try bind(ids[0],to:1,in:stmt); try bind(ids[1],to:2,in:stmt)

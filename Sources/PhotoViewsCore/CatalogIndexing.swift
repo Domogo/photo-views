@@ -44,7 +44,7 @@ extension Catalog {
         let prior = try assetRows("SELECT id,source_id,relative_path,file_id,byte_size,modified_at FROM assets WHERE source_id=? AND relative_path=?",[source.id.uuidString,relativePath]).first
         let existing = try prior ?? movedAsset(source:source,root:root,fileID:fileID,size:size,modified:modified,hash:hash)
         let id = existing?.id ?? UUID()
-        let changed = existing == nil || existing?.byteSize != size || existing?.modifiedAt != modified || (prior != nil && existing?.fileID != fileID)
+        let changed = existing == nil || existing?.byteSize != size || existing?.modifiedAt != modified || (prior != nil && existing?.fileID?.hasPrefix("inode-v1:") == true && existing?.fileID != fileID)
         try execute("BEGIN IMMEDIATE")
         do {
             try run("""
@@ -52,6 +52,10 @@ extension Catalog {
             VALUES(?,?,?,?,?,?,?,1) ON CONFLICT(id) DO UPDATE SET relative_path=excluded.relative_path,
             file_id=excluded.file_id,byte_size=excluded.byte_size,modified_at=excluded.modified_at,scan_token=excluded.scan_token,available=1
             """,[id.uuidString,source.id.uuidString,relativePath,fileID,String(size),modified.map { String($0.timeIntervalSince1970) },token])
+            if changed || existing?.relativePath != relativePath {
+                try run("DELETE FROM photo_assets WHERE photo_id=(SELECT photo_id FROM photo_assets WHERE asset_id=?)",[id.uuidString])
+                try execute("DELETE FROM photos WHERE NOT EXISTS(SELECT 1 FROM photo_assets WHERE photo_id=photos.id)")
+            }
             if changed {
                 try run("DELETE FROM metadata WHERE asset_id=?",[id.uuidString])
                 try run("DELETE FROM derivatives WHERE asset_id=?",[id.uuidString])
@@ -71,6 +75,7 @@ extension Catalog {
     func finishDiscovery(sourceID: UUID, token: String) throws {
         try run("UPDATE assets SET available=0 WHERE source_id=? AND (scan_token IS NULL OR scan_token<>?)",[sourceID.uuidString,token])
     }
+    public func markSourceUnavailable(_ id: UUID) throws { try scanState(id,"disconnected",error:"Reconnect the drive or restore access. Cached photos remain available.") }
     func recoverJobs(sourceID: UUID) throws {
         try run("UPDATE index_jobs SET state='pending' WHERE source_id=? AND state IN ('running','paused')",[sourceID.uuidString])
     }

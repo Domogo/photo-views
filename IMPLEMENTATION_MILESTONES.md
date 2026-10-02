@@ -1,6 +1,6 @@
 # Photo Views — Implementation Milestones
 
-Status: implementation backlog, 2026-10-02. M0–M6 implementation and bounded evidence are tracked in their status documents; M7–M8 remain unimplemented. M6’s six approved examples pass; broader held-out plan agreement remains M8; see [M6_STATUS.md](M6_STATUS.md).
+Status: implementation backlog, 2026-10-02. M0–M7 implementation and bounded evidence are tracked in their status documents; M8 verification/demo handoff remains pending. Drive reconnection and RAW+JPEG integrity are tracked in [M7_STATUS.md](M7_STATUS.md). M6’s six approved examples pass; broader held-out plan agreement remains M8; see [M6_STATUS.md](M6_STATUS.md).
 
 Authority: [prd.md](prd.md) for requirements, [PRODUCT.md](PRODUCT.md) for durable context, [DESIGN.md](DESIGN.md) for the selected Photo Workbench direction, and [.impeccable/surfaces/main-workspace.md](.impeccable/surfaces/main-workspace.md) for workspace behavior.
 
@@ -109,7 +109,7 @@ Milestones describe working increments, not calendar commitments. Hackathon dura
 
 **Depends on:** M3 filter model and M4 recipe UI; M5 supplies confirmed-tag semantics. DSPy optimization is optional later, but the baseline editable-plan behavior is required.
 
-## M7 — Offline recovery and RAW+JPEG integrity
+## M7 — Drive reconnection, indexing recovery and RAW+JPEG integrity
 
 **Outcome:** the complete workflow withstands disconnects, source changes, and paired assets.
 
