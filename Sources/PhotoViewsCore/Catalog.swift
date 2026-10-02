@@ -14,12 +14,12 @@ public enum CatalogError: LocalizedError {
 
 /// Single-threaded store. The app owns it on the main actor; indexing will use a separate connection.
 public final class Catalog {
-    private var db: OpaquePointer?
+    var db: OpaquePointer?
     public let url: URL
-    public static let schemaVersion = 1
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
-    private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    public static let schemaVersion = 2
+    let encoder = JSONEncoder()
+    let decoder = JSONDecoder()
+    let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
     public init(url: URL) throws {
         self.url = url
@@ -35,6 +35,7 @@ public final class Catalog {
             let version = try scalar("PRAGMA user_version")
             guard version <= Self.schemaVersion else { throw CatalogError.unsupportedVersion(version) }
             if version == 0 { try migrate() }
+            if try scalar("PRAGMA user_version") == 1 { try migrateIndexing() }
             try execute("PRAGMA journal_mode=WAL")
         } catch {
             if let db { sqlite3_close(db) }; db = nil
@@ -44,6 +45,25 @@ public final class Catalog {
     deinit { if let db { sqlite3_close(db) } }
     public var version: Int { get throws { try scalar("PRAGMA user_version") } }
 
+    private func migrateIndexing() throws {
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try execute("""
+            ALTER TABLE assets ADD COLUMN scan_token TEXT;
+            ALTER TABLE assets ADD COLUMN content_hash TEXT;
+            ALTER TABLE metadata ADD COLUMN capture_date REAL;
+            CREATE INDEX asset_file_identity ON assets(source_id,file_id);
+            CREATE UNIQUE INDEX job_asset_stage_version ON index_jobs(asset_id,stage,pipeline_version);
+            CREATE TABLE derivatives(asset_id TEXT PRIMARY KEY REFERENCES assets(id), thumbnail_path TEXT,
+              analysis_path TEXT, pipeline_version TEXT NOT NULL, preview_source TEXT NOT NULL,
+              last_access REAL NOT NULL, byte_size INTEGER NOT NULL);
+            CREATE TABLE source_scans(source_id TEXT PRIMARY KEY REFERENCES sources(id), state TEXT NOT NULL,
+              error TEXT, updated_at REAL NOT NULL);
+            PRAGMA user_version=2;
+            """)
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
     private func migrate() throws {
         try execute("BEGIN IMMEDIATE")
         do {
@@ -75,36 +95,36 @@ public final class Catalog {
             try execute("COMMIT")
         } catch { try? execute("ROLLBACK"); throw error }
     }
-    private func execute(_ sql: String) throws {
+    func execute(_ sql: String) throws {
         guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { throw failure() }
     }
-    private func failure() -> CatalogError { .sqlite(String(cString: sqlite3_errmsg(db))) }
-    private func statement(_ sql: String) throws -> OpaquePointer {
+    func failure() -> CatalogError { .sqlite(String(cString: sqlite3_errmsg(db))) }
+    func statement(_ sql: String) throws -> OpaquePointer {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else { throw failure() }
         return stmt
     }
-    private func bind(_ value: String?, to index: Int32, in stmt: OpaquePointer) throws {
+    func bind(_ value: String?, to index: Int32, in stmt: OpaquePointer) throws {
         let result = value.map { sqlite3_bind_text(stmt, index, $0, -1, transient) } ?? sqlite3_bind_null(stmt, index)
         guard result == SQLITE_OK else { throw failure() }
     }
-    private func bind(_ data: Data, to index: Int32, in stmt: OpaquePointer) throws {
+    func bind(_ data: Data, to index: Int32, in stmt: OpaquePointer) throws {
         let result = data.withUnsafeBytes { sqlite3_bind_blob(stmt, index, $0.baseAddress, Int32($0.count), transient) }
         guard result == SQLITE_OK else { throw failure() }
     }
-    private func scalar(_ sql: String) throws -> Int {
+    func scalar(_ sql: String) throws -> Int {
         let stmt = try statement(sql); defer { sqlite3_finalize(stmt) }
         guard sqlite3_step(stmt) == SQLITE_ROW else { throw failure() }
         return Int(sqlite3_column_int(stmt, 0))
     }
-    private func text(_ stmt: OpaquePointer, _ index: Int32) -> String {
+    func text(_ stmt: OpaquePointer, _ index: Int32) -> String {
         sqlite3_column_text(stmt, index).map { String(cString: $0) } ?? ""
     }
-    private func data(_ stmt: OpaquePointer, _ index: Int32) -> Data {
+    func data(_ stmt: OpaquePointer, _ index: Int32) -> Data {
         guard let bytes = sqlite3_column_blob(stmt, index) else { return Data() }
         return Data(bytes: bytes, count: Int(sqlite3_column_bytes(stmt, index)))
     }
-    private func finish(_ stmt: OpaquePointer) throws {
+    func finish(_ stmt: OpaquePointer) throws {
         guard sqlite3_step(stmt) == SQLITE_DONE else { throw failure() }
     }
 

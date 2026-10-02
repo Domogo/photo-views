@@ -76,6 +76,11 @@ public struct AssetRecord: Identifiable, Codable {
     public var modifiedAt: Date?
 }
 public struct MetadataRecord: Codable {
+    public init() {}
+    public var captureDateText: String?
+    public var captureTimezone: String?
+    public var orientation: Int?
+    public var decoder: String?
     public var captureDate: Date?
     public var camera: String?
     public var lens: String?
@@ -119,4 +124,36 @@ public struct IndexJobRecord: Identifiable, Codable {
     public var error: String?
     public var pipelineVersion: String?
     public var updatedAt: Date
+}
+
+public struct IndexedAsset: Identifiable, Codable {
+    public var id: UUID { asset.id }
+    public var asset: AssetRecord
+    public var metadata: MetadataRecord?
+    public var thumbnailPath: String?
+    public var analysisPath: String?
+    public var pipelineVersion: String?
+    public var previewSource: String?
+    public var available: Bool
+    public var previewState: IndexState?
+    public var error: String?
+    public var filename: String { URL(fileURLWithPath: asset.relativePath).lastPathComponent }
+}
+public struct SourceProgress: Codable {
+    public var sourceID: UUID
+    public var state: String
+    public var total: Int
+    public var metadataReady: Int
+    public var completed: Int
+    public var failed: Int
+    public var error: String?
+}
+public struct DerivativeRecord {
+    public var assetID: UUID
+    public var thumbnailPath: String?
+    public var analysisPath: String?
+    public var pipelineVersion: String
+    public var previewSource: String
+    public var lastAccess: Date
+    public var byteSize: Int64
 }

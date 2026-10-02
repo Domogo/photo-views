@@ -9,6 +9,7 @@ let package = Package(
         .systemLibrary(name: "CSQLite"),
         .target(name: "PhotoViewsCore", dependencies: ["CSQLite"]),
         .executableTarget(name: "PhotoViewsApp", dependencies: ["PhotoViewsCore"]),
+        .executableTarget(name: "IndexChecks", dependencies: ["PhotoViewsCore"], path: "Tests/IndexingChecks"),
         .executableTarget(name: "CatalogChecks", dependencies: ["PhotoViewsCore"], path: "Tests/PhotoViewsCoreTests")
     ],
     swiftLanguageModes: [.v5]

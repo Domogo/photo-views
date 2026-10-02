@@ -14,7 +14,7 @@ final class CatalogTests {
         let source = try FolderAccess.source(for:folder)
         let url = root.appendingPathComponent("catalog.sqlite")
         var store: Catalog? = try Catalog(url:url)
-        try expectEqual(try store!.version,1)
+        try expectEqual(try store!.version,Catalog.schemaVersion)
         let first = try store!.register(source)
         let duplicate = try store!.register(FolderAccess.source(for:folder))
         try expectEqual(first.id,duplicate.id)
