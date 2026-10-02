@@ -23,6 +23,7 @@ struct WorkspaceView: View {
             VStack(spacing:0) {
                 recipeBar.fixedSize(horizontal:false,vertical:true)
                 Divider()
+                indexingBar
                 content.frame(maxWidth:.infinity,maxHeight:.infinity)
             }
             .frame(minWidth:360,maxWidth:.infinity,maxHeight:.infinity)
@@ -52,6 +53,7 @@ struct WorkspaceView: View {
             Button("OK",role:.cancel) { model.errorMessage = nil }
         } message: { Text(model.errorMessage ?? "") }
         .sheet(isPresented:$saving) { saveSheet }
+        .sheet(isPresented:$model.previewPresented) { PhotoPreview(model:model) }
     }
     private var sidebarSelection: Binding<String?> {
         Binding(get: {
@@ -75,7 +77,7 @@ struct WorkspaceView: View {
                             Image(systemName:"folder").padding(.top,2)
                             VStack(alignment:.leading,spacing:3) {
                                 Text(source.name).lineLimit(1)
-                                Text(model.availability[source.id] ?? "Checking access…")
+                                Text(model.sourceStatus(source))
                                     .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                             }
                             Spacer(minLength:0)
@@ -116,7 +118,7 @@ struct WorkspaceView: View {
                 TextField("Describe a photo or enter a keyword",text:$model.recipe.search)
                     .textFieldStyle(.plain).accessibilityLabel("Photo search")
                     .disabled(true)
-                    .help("Search becomes available after photo indexing is implemented.")
+                    .help("Visual search is coming next. Browse photos and camera metadata now.")
                 if model.hasUnsavedChanges { Text("Edited").font(.caption).foregroundStyle(.secondary) }
                 if model.selectedSavedView != nil && model.hasUnsavedChanges {
                     Button("Update View") { model.saveView(name:model.currentTitle,update:true) }
@@ -144,7 +146,7 @@ struct WorkspaceView: View {
                 .popover(isPresented:$filtersVisible) {
                     VStack(alignment:.leading,spacing:8) {
                         Text("Metadata filters").font(.headline)
-                        Text("Camera, date, and folder filters become available after indexing.")
+                        Text("Metadata filters are coming next. You can group by camera, month, or folder now.")
                             .foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                     }.padding(16).frame(width:260)
                 }
@@ -152,12 +154,12 @@ struct WorkspaceView: View {
     }
     private var groupPicker: some View {
         Picker("Group by",selection:$model.recipe.grouping) {
-            ForEach(Grouping.allCases) { item in Text(item.title).tag(item) }
-        }.frame(width:165).help("Choose how this view will group indexed photos.")
+            ForEach(Grouping.allCases) { item in Text(item.title).tag(item).disabled(item == .subject) }
+        }.frame(width:165).help("Group photos in this view.")
     }
     private var sortPicker: some View {
         Picker("Sort",selection:$model.recipe.sorting) {
-            ForEach(PhotoSort.allCases) { item in Text(item.title).tag(item) }
+            ForEach(PhotoSort.allCases) { item in Text(item.title).tag(item).disabled(item == .relevance) }
         }.frame(width:185)
     }
     @ViewBuilder private var content: some View {
@@ -170,11 +172,13 @@ struct WorkspaceView: View {
                 Button("Add Folder…") { model.chooseFolder() }.buttonStyle(.borderedProminent)
                     .keyboardShortcut("o",modifiers:[.command])
             }
+        } else if !model.assets.isEmpty {
+            PhotoGrid(model:model)
         } else {
-            emptyState(icon:"folder",title:"Folder added",detail:"Your sources and view settings are saved. Photo indexing comes next; no photos have been indexed yet.") {
+            emptyState(icon:"folder",title:model.indexing ? "Discovering your photos" : "Ready to browse",detail:model.indexing ? "Photos will appear as their previews are ready. Originals stay in their folders." : "Start indexing this folder to build previews and read camera metadata. Originals stay where they are.") {
                 HStack {
                     Button("Add Another Folder…") { model.chooseFolder() }
-                    Button("Check Availability") { model.refreshAccess() }
+                    Button(model.paused ? "Resume Indexing" : "Start Indexing") { model.startIndexing() }.disabled(model.indexing)
                 }
             }
         }
@@ -191,11 +195,13 @@ struct WorkspaceView: View {
         ScrollView {
             VStack(alignment:.leading,spacing:Workbench.sectionGap) {
                 Text("Details").font(.headline)
-                if let source = model.selectedSource {
+                if let asset = model.selectedAsset {
+                    photoDetails(asset)
+                } else if let source = model.selectedSource {
                     VStack(alignment:.leading,spacing:12) {
                         Label(source.name,systemImage:"folder").font(.body.weight(.medium))
                         LabeledContent("Availability",value:model.availability[source.id] ?? "Checking…")
-                        LabeledContent("Photos",value:"Not indexed")
+                        LabeledContent("Photos",value:String(model.indexProgress.first { $0.sourceID == source.id }?.total ?? 0))
                         Text(source.lastKnownPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                         Button("Reveal in Finder") { model.revealSource() }
                         if model.availability[source.id] == "Access needed" {
@@ -203,7 +209,7 @@ struct WorkspaceView: View {
                         }
                     }
                 } else {
-                    Text("Select a source to see its details. Photo metadata will appear here after indexing.")
+                    Text("Select a photo to inspect its metadata, or select a source for folder details.")
                         .foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                 }
                 Divider()
@@ -220,6 +226,61 @@ struct WorkspaceView: View {
             }.padding(Workbench.contentInset)
         }
         .background(Color(nsColor:.controlBackgroundColor))
+    }
+    private var indexingBar: some View {
+        VStack(alignment:.leading,spacing:8) {
+            if !model.sources.isEmpty {
+                HStack(spacing:8) {
+                    if model.indexing { ProgressView().controlSize(.small) }
+                    Text(model.discovering ? "Discovering photos…" : "\(model.completedPreviews) of \(model.totalAssets) previews indexed\(model.paused ? " · Paused" : "")")
+                        .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    if model.failedPreviews > 0 { Text("\(model.failedPreviews) failed").font(.caption).foregroundStyle(.secondary) }
+                    Spacer(minLength:0)
+                    if model.indexing {
+                        Button(model.pausing ? "Pausing…" : "Pause") { model.pauseIndexing() }.disabled(model.pausing)
+                    } else {
+                        Button(model.paused ? "Resume" : model.totalAssets == 0 ? "Start Indexing" : "Refresh Folders") { model.startIndexing() }
+                    }
+                }
+                if model.pausing { Text("Pausing after the current photo…").font(.caption).foregroundStyle(.secondary) }
+                if model.recipe.grouping == .subject { Text("Subject grouping is coming with tags; photos are currently ungrouped.").font(.caption).foregroundStyle(.secondary) }
+                if model.recipe.sorting == .relevance { Text("Relevance sorting is coming with search; photos currently use newest first.").font(.caption).foregroundStyle(.secondary) }
+                if model.totalAssets > 0 {
+                    Text("\(model.metadataReady) metadata records ready · Visual search comes next")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                if let error = model.scopedProgress.compactMap({ $0.error }).first { Text(error).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
+            }
+        }.padding(.horizontal,20).padding(.vertical,model.sources.isEmpty ? 0 : 12)
+    }
+    private func photoDetails(_ asset: IndexedAsset) -> some View {
+        VStack(alignment:.leading,spacing:12) {
+            Text(asset.filename).font(.body.weight(.medium)).textSelection(.enabled)
+            CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0)).frame(height:128)
+            Button("Open Preview") { model.previewPresented = true }
+            Button("Reveal Original in Finder") { model.revealPhoto() }
+            LabeledContent("Original",value:model.originalAvailable(asset) ? "Available" : asset.available ? "Drive disconnected" : "Missing")
+            if let metadata = asset.metadata {
+                LabeledContent("Camera",value:metadata.camera ?? "Unknown")
+                LabeledContent("Captured",value:metadata.captureDateText ?? "Unknown")
+                if metadata.captureDateText != nil && metadata.captureTimezone == nil { Text("Camera timezone not recorded").font(.caption).foregroundStyle(.secondary) }
+                LabeledContent("Lens",value:metadata.lens ?? "Unknown")
+                LabeledContent("ISO",value:metadata.iso.map { String(Int($0)) } ?? "Unknown")
+                LabeledContent("Aperture",value:metadata.aperture.map { "f/\($0.formatted())" } ?? "Unknown")
+                LabeledContent("Exposure",value:metadata.exposureDescription ?? "Unknown")
+                LabeledContent("Size",value:metadata.width.flatMap { width in metadata.height.map { "\(width) × \($0)" } } ?? "Unknown")
+                LabeledContent("Format",value:metadata.format ?? "Unknown")
+            }
+            if let error = asset.error {
+                Label("Preview failed",systemImage:"exclamationmark.triangle").font(.subheadline.weight(.semibold))
+                Text(error).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                Button("Retry Preview") { model.retrySelectedPreview() }.disabled(model.indexing || !model.originalAvailable(asset))
+            } else if asset.thumbnailPath == nil && asset.previewState == .complete {
+                Text("The preview cache was cleared to stay within its limit. Metadata and the original are preserved.").font(.caption).foregroundStyle(.secondary)
+                Button("Rebuild Preview") { model.retrySelectedPreview() }.disabled(model.indexing || !model.originalAvailable(asset))
+            } else if let source = asset.previewSource { Text("\(source) · sRGB").font(.caption).foregroundStyle(.secondary) }
+            Text(asset.asset.relativePath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+        }
     }
     private var saveSheet: some View {
         VStack(alignment:.leading,spacing:20) {

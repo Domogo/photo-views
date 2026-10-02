@@ -137,10 +137,11 @@ extension Catalog {
             results.append(SourceProgress(sourceID:id,state:text(stmt,1),total:Int(sqlite3_column_int(stmt,3)),metadataReady:Int(sqlite3_column_int(stmt,4)),completed:Int(sqlite3_column_int(stmt,5)),failed:Int(sqlite3_column_int(stmt,6)),error:sqlite3_column_type(stmt,2) == SQLITE_NULL ? nil : text(stmt,2)))
         }
     }
-    public func indexedAssets(sourceIDs: [UUID] = [], sort: PhotoSort = .captureNewest, limit: Int = 500, readyOnly: Bool = false, selectedID: UUID? = nil) throws -> [IndexedAsset] {
+    public func indexedAssets(sourceIDs: [UUID] = [], sort: PhotoSort = .captureNewest, limit: Int = 500, readyOnly: Bool = false, selectedID: UUID? = nil, assetID: UUID? = nil) throws -> [IndexedAsset] {
         let order = sort == .filename ? "a.relative_path COLLATE NOCASE,a.id" : "COALESCE(m.capture_date,a.modified_at,0) \(sort == .captureOldest ? "ASC" : "DESC"),a.id"
         var predicates: [String] = []
         if !sourceIDs.isEmpty { predicates.append("a.source_id IN (\(Array(repeating:"?",count:sourceIDs.count).joined(separator:",")))") }
+        if let assetID { predicates.append("a.id='\(assetID.uuidString)'") }
         if readyOnly { predicates.append("(j.state IN ('complete','failed')\(selectedID.map { " OR a.id='\($0.uuidString)'" } ?? ""))") }
         let whereClause = predicates.isEmpty ? "" : " WHERE "+predicates.joined(separator:" AND ")
         let stmt = try statement("""

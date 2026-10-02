@@ -87,6 +87,16 @@ public struct MetadataRecord: Codable {
     public var iso: Double?
     public var aperture: Double?
     public var shutterSeconds: Double?
+    public var exposureDescription: String? {
+        guard let seconds = shutterSeconds, seconds.isFinite, seconds > 0 else { return nil }
+        if seconds < 1 {
+            let reciprocal = 1 / seconds
+            if reciprocal.isFinite, reciprocal < Double(Int.max) {
+                return "1/\(Int(reciprocal.rounded())) s"
+            }
+        }
+        return seconds.formatted(.number.precision(.significantDigits(1...6))) + " s"
+    }
     public var width: Int?
     public var height: Int?
     public var format: String?

@@ -51,6 +51,13 @@ func index(_ coordinator: IndexCoordinator, catalog: URL, cache: URL, source: Ca
         if CommandLine.arguments.count == 5 && CommandLine.arguments[1] == "--fixtures" {
             try realFixtures(manifest:URL(fileURLWithPath:CommandLine.arguments[2]),sourceRoot:URL(fileURLWithPath:CommandLine.arguments[3]),output:URL(fileURLWithPath:CommandLine.arguments[4])); return
         }
+        var exposure = MetadataRecord()
+        exposure.shutterSeconds = 1.0 / 8000
+        try check(exposure.exposureDescription == "1/8000 s", "Fast shutter speed lost precision")
+        exposure.shutterSeconds = 2.5
+        try check(exposure.exposureDescription == 2.5.formatted(.number.precision(.significantDigits(1...6))) + " s", "Long exposure lost precision")
+        exposure.shutterSeconds = .nan
+        try check(exposure.exposureDescription == nil, "Invalid exposure should be unknown")
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("PhotoViews-IndexChecks-"+UUID().uuidString)
         try fm.createDirectory(at:root,withIntermediateDirectories:true)
@@ -84,6 +91,8 @@ func index(_ coordinator: IndexCoordinator, catalog: URL, cache: URL, source: Ca
         try check(assets.filter { $0.previewState == .failed && $0.error != nil }.count == 1,"Failure was not isolated and actionable")
         try check(try preview.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate == checkpointDate,"Completed preview was regenerated on resume")
         let oriented = assets.first { $0.filename == "a-oriented.jpg" }!
+        try check(try store.indexedAssets(limit:1,assetID:oriented.id).first?.id == oriented.id, "Selected asset lookup lost its identity outside pagination")
+        try check(try store.indexedAssets(assetID:UUID()).isEmpty, "Unknown selection returned unrelated photos")
         let image = CGImageSourceCreateWithURL(URL(fileURLWithPath:oriented.analysisPath!) as CFURL,nil)!
         let p = CGImageSourceCopyPropertiesAtIndex(image,0,nil)! as NSDictionary
         try check(p[kCGImagePropertyPixelWidth] as? Int == 320 && p[kCGImagePropertyPixelHeight] as? Int == 480,"Orientation transform failed")
