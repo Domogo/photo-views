@@ -28,35 +28,16 @@ struct CachedPhoto: View {
         }
     }
 }
+private struct VisiblePhotos: PreferenceKey {
+    static var defaultValue: [UUID:CGFloat] = [:]
+    static func reduce(value: inout [UUID:CGFloat], nextValue: () -> [UUID:CGFloat]) { value.merge(nextValue(),uniquingKeysWith:{ _,new in new }) }
+}
 struct PhotoGrid: View {
     @ObservedObject var model: WorkspaceModel
     @FocusState private var focused: Bool
-    private struct PhotoGroup: Identifiable { var id: String; var assets: [IndexedAsset] }
-    private var groups: [PhotoGroup] {
-        if model.recipe.grouping == .none || model.recipe.grouping == .subject { return [PhotoGroup(id:"",assets:model.assets)] }
-        let grouped = Dictionary(grouping:model.assets) { asset -> String in
-            switch model.recipe.grouping {
-            case .folder:
-                let source = model.sources.first { $0.id == asset.asset.sourceID }?.name ?? "Source"
-                let folder = (asset.asset.relativePath as NSString).deletingLastPathComponent
-                return folder.isEmpty ? source : source+" / "+folder
-            case .camera: return asset.metadata?.camera ?? "Unknown camera"
-            case .month:
-                guard let date = asset.metadata?.captureDateText else { return "Unknown date" }
-                return String(date.prefix(7)).replacingOccurrences(of:":",with:"-")
-            default: return ""
-            }
-        }
-        let keys = grouped.keys.sorted { a,b in
-            if model.isRankedSearch {
-                let firstA = model.assets.firstIndex { asset in grouped[a]!.contains { $0.id == asset.id } }
-                let firstB = model.assets.firstIndex { asset in grouped[b]!.contains { $0.id == asset.id } } ?? Int.max
-                return (firstA ?? Int.max) < firstB
-            }
-            if a.hasPrefix("Unknown") { return false }; if b.hasPrefix("Unknown") { return true }
-            return model.recipe.grouping == .month && model.recipe.sorting != .captureOldest ? a > b : a.localizedStandardCompare(b) == .orderedAscending
-        }
-        return keys.map { PhotoGroup(id:$0,assets:grouped[$0]!) }
+    @State private var visibleAnchor: UUID?
+    private var groups: [PhotoResultGroup] {
+        ResultGrouping.groups(model.assets,by:model.recipe.grouping,sources:model.sources,ranked:model.isRankedSearch,sorting:model.recipe.sorting)
     }
     var body: some View {
         GeometryReader { geometry in
@@ -67,8 +48,8 @@ struct PhotoGrid: View {
                         Text(model.isRankedSearch ? "\(model.assets.count) nearest results · Ranked by similarity" : "\(model.assets.count) of \(model.resultCount) photos shown")
                             .font(.caption).foregroundStyle(.secondary)
                         ForEach(groups) { group in
-                            if !group.id.isEmpty {
-                                HStack { Text(group.id).font(.headline).lineLimit(1); Text("\(group.assets.count) loaded").font(.caption).foregroundStyle(.secondary) }
+                            if !group.title.isEmpty {
+                                HStack { Text(group.title).font(.headline).lineLimit(1); Text("\(group.assets.count) loaded").font(.caption).foregroundStyle(.secondary) }
                             }
                             LazyVGrid(columns:[GridItem(.adaptive(minimum:160),spacing:16)],spacing:20) {
                                 ForEach(group.assets) { asset in
@@ -83,6 +64,9 @@ struct PhotoGrid: View {
                                     }
                                     .buttonStyle(.plain)
                                     .id(asset.id)
+                                    .background(GeometryReader { frame in
+                                        Color.clear.preference(key:VisiblePhotos.self,value:[asset.id:frame.frame(in:.named("photoScroll")).maxY])
+                                    })
                                     .accessibilityLabel("\(asset.filename), \(asset.previewState == .failed ? "preview failed" : model.originalAvailable(asset) ? "original available" : "original offline")")
                                     .contextMenu {
                                         Button("Preview") { model.selectAsset(asset.id); model.previewPresented = true }
@@ -97,6 +81,13 @@ struct PhotoGrid: View {
                             Button("Load More Photos") { model.loadMore() }.onAppear { model.loadMore() }
                         }
                     }.padding(20)
+                }
+                .coordinateSpace(name:"photoScroll")
+                .onPreferenceChange(VisiblePhotos.self) { positions in
+                    visibleAnchor = positions.filter { $0.value > 0 }.min { a,b in a.value == b.value ? a.key.uuidString < b.key.uuidString : a.value < b.value }?.key
+                }
+                .onChange(of:model.recipe.grouping) { _,_ in
+                    if let id = model.selectedAssetID ?? visibleAnchor, model.assets.contains(where:{ $0.id == id }) { scroll.scrollTo(id,anchor:.center) }
                 }
                 .focusable().focusEffectDisabled().focused($focused)
                 .onKeyPress(.space) { guard model.selectedAsset != nil else { return .ignored }; model.previewPresented = true; return .handled }

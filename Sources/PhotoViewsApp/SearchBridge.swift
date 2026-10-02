@@ -5,6 +5,7 @@ struct SearchFailure: Decodable { var assetID: UUID; var filename: String; var e
 struct SearchCoverage: Decodable { var total: Int; var embedded: Int; var failed: Int; var failures: [SearchFailure]? = nil }
 struct SearchResult: Decodable {
     var assets: [IndexedAsset]
+    var selectedAsset: IndexedAsset?
     var resultCount: Int
     var candidateCount: Int
     var cameras: [String]

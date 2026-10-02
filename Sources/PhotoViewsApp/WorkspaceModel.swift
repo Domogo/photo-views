@@ -27,6 +27,9 @@ import PhotoViewsCore
     @Published var visualCoverage = SearchCoverage(total:0,embedded:0,failed:0)
     @Published var visualIndexing = false
     @Published var visualPaused = false
+    static let modelVersion = "openclip-vit-b32-1a25a446712ba5ee05982a381eed697ef9b435cf:imageio-m2-v1:search-v1"
+    static let rankingVersion = "rrf-k60-v1"
+    private var persistedRecipe: ViewRecipe?
     private var searchGeneration = 0
     private var lastVisualRefresh = Date.distantPast
     private var searchTask: Task<Void,Never>?
@@ -52,6 +55,8 @@ import PhotoViewsCore
             sources = try store.sources()
             savedViews = try store.savedViews()
             recipe = try store.workspaceRecipe()
+            persistedRecipe = recipe
+            if let id = try store.selectedView(), savedViews.contains(where:{ $0.id == id }) { selectedSavedView = id }
             isReady = true
             refreshAccess()
             refreshAssets()
@@ -72,17 +77,34 @@ import PhotoViewsCore
     var hasUnsavedChanges: Bool {
         savedViews.first(where:{$0.id == selectedSavedView}).map { $0.recipe != recipe } ?? false
     }
+    var needsCurrentSearchModel: Bool {
+        isRankedSearch && ((recipe.modelVersion != nil && recipe.modelVersion != Self.modelVersion) ||
+            (recipe.rankingVersion != nil && recipe.rankingVersion != Self.rankingVersion))
+    }
+    func useCurrentSearchModel() {
+        recipe.modelVersion = Self.modelVersion; recipe.rankingVersion = Self.rankingVersion
+    }
     func persistRecipe() {
         guard let catalog else { return }
         do {
-            assetLimit = 500
-            if hasSearch { recipe.modelVersion = "openclip-vit-b32-1a25a446712ba5ee05982a381eed697ef9b435cf:imageio-m2-v1:search-v1"; recipe.rankingVersion = "rrf-k60-v1" }
-            try catalog.storeWorkspaceRecipe(recipe); refreshAssets()
+            let previous = persistedRecipe
+            try catalog.storeWorkspaceRecipe(recipe)
+            try catalog.storeSelectedView(selectedSavedView)
+            persistedRecipe = recipe
+            // Regrouping is pure presentation. Preserve loaded membership and don't call the worker.
+            if var previous {
+                previous.grouping = recipe.grouping
+                if previous == recipe { return }
+            }
+            var previousMembership = previous
+            previousMembership?.grouping = recipe.grouping; previousMembership?.sorting = recipe.sorting
+            if previousMembership != recipe { assetLimit = 500 }
+            refreshAssets()
         } catch { errorMessage = error.localizedDescription }
     }
-    func selectAll() { selectedSavedView = nil; assetLimit = 500; recipe.sourceIDs = []; persistRecipe() }
-    func selectSource(_ source: CatalogSource) { selectedSavedView = nil; assetLimit = 500; recipe.sourceIDs = [source.id]; persistRecipe() }
-    func selectView(_ view: SavedView) { selectedSavedView = view.id; assetLimit = 500; recipe = view.recipe; persistRecipe() }
+    func selectAll() { selectedSavedView = nil; recipe.sourceIDs = []; persistRecipe() }
+    func selectSource(_ source: CatalogSource) { selectedSavedView = nil; recipe.sourceIDs = [source.id]; persistRecipe() }
+    func selectView(_ view: SavedView) { selectedSavedView = view.id; assetLimit = 500; recipe = view.recipe; persistRecipe(); refreshAssets() }
 
     func chooseFolder(reauthorizing source: CatalogSource? = nil) {
         let panel = NSOpenPanel()
@@ -150,8 +172,12 @@ import PhotoViewsCore
         guard let catalog else { return false }
         do {
             let existing = update ? savedViews.first(where:{$0.id == selectedSavedView}) : nil
+            if hasSearch && !needsCurrentSearchModel {
+                recipe.modelVersion = Self.modelVersion; recipe.rankingVersion = Self.rankingVersion
+            }
             let view = SavedView(id:existing?.id ?? UUID(),name:name,recipe:recipe,createdAt:existing?.createdAt ?? Date())
             try catalog.save(view); savedViews = try catalog.savedViews(); selectedSavedView = view.id
+            try catalog.storeSelectedView(view.id); try catalog.storeWorkspaceRecipe(recipe); persistedRecipe = recipe
             return true
         } catch { errorMessage = error.localizedDescription; return false }
     }
@@ -229,7 +255,8 @@ import PhotoViewsCore
         indexProgress = (try? catalog.progress()) ?? []
         searchGeneration += 1; let generation = searchGeneration
         searchTask?.cancel()
-        let payload: [String:Any] = ["op":"query","recipe":requestRecipe(),"mode":searchMode,"limit":assetLimit]
+        let requestedSelection = selectedAssetID
+        let payload: [String:Any] = ["op":"query","recipe":requestRecipe(),"mode":searchMode,"limit":assetLimit,"selectedAssetID":selectedAssetID?.uuidString ?? ""]
         searching = true
         searchTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds:180_000_000)
@@ -244,8 +271,8 @@ import PhotoViewsCore
                     self.resultCount = result.resultCount; self.cameras = result.cameras; self.visualCoverage = result.coverage
                     if let id = self.selectedAssetID {
                         if let selected = self.assets.first(where:{ $0.id == id }) { self.retainedSelection = selected }
-                        else if !self.hasSearch && !self.hasFilters, let selected = try? catalog.indexedAssets(limit:1,assetID:id).first,
-                                self.recipe.sourceIDs.isEmpty || self.recipe.sourceIDs.contains(selected.asset.sourceID) { self.retainedSelection = self.normalizeCache(selected) }
+                        else if id != requestedSelection { self.refreshAssets() } // Selection changed while this request was in flight.
+                        else if let selected = result.selectedAsset, selected.id == id { self.retainedSelection = self.normalizeCache(selected) }
                         else { self.selectedAssetID = nil; self.retainedSelection = nil; self.previewPresented = false }
                     }
                 case .failure(let error):

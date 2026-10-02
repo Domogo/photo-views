@@ -53,7 +53,7 @@ struct WorkspaceView: View {
         .alert("Photo Views",isPresented:Binding(get:{ model.errorMessage != nil },set:{ if !$0 { model.errorMessage = nil } })) {
             Button("OK",role:.cancel) { model.errorMessage = nil }
         } message: { Text(model.errorMessage ?? "") }
-        .sheet(isPresented:$saving) { saveSheet }
+        .sheet(isPresented:$saving) { SaveLiveViewSheet(model:model,saving:$saving,viewName:$viewName) }
         .sheet(isPresented:$model.previewPresented) { PhotoPreview(model:model) }
     }
     private var sidebarSelection: Binding<String?> {
@@ -152,11 +152,25 @@ struct WorkspaceView: View {
                     Divider()
                     Button("Save View…") { viewName = model.selectedSavedView == nil ? "" : model.currentTitle; saving = true }
                         .disabled(model.sources.isEmpty || !model.isReady)
-                    if model.selectedSavedView != nil && model.hasUnsavedChanges { Button("Update View") { model.saveView(name:model.currentTitle,update:true) } }
+                    if model.selectedSavedView != nil {
+                        Button("Update View") { model.saveView(name:model.currentTitle,update:true) }.disabled(!model.hasUnsavedChanges)
+                        Button("Revert Changes") { if let view = model.savedViews.first(where:{ $0.id == model.selectedSavedView }) { model.selectView(view) } }.disabled(!model.hasUnsavedChanges)
+                    }
+                    Divider()
+                    Button("Refresh Results") { model.refreshAssets() }
                 }.help("Group, sort or save this view")
                 Spacer(minLength:0)
-                if model.hasUnsavedChanges { Text("Edited").font(.caption).foregroundStyle(.secondary) }
+                if model.hasUnsavedChanges { Text("Unsaved changes").font(.caption).foregroundStyle(.secondary) }
                 if model.searching { ProgressView().controlSize(.small).accessibilityLabel("Searching photos") }
+            }
+            if model.selectedSavedView != nil {
+                Text("Live view · New matching photos appear as indexing finishes.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+            }
+            if model.needsCurrentSearchModel {
+                VStack(alignment:.leading,spacing:8) {
+                    Text("This view uses a different search model. Changing it may change the results.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                    Button("Use Current Search Model") { model.useCurrentSearchModel() }
+                }
             }
             if filtersVisible {
                 Divider()
@@ -337,11 +351,17 @@ struct WorkspaceView: View {
             Text(asset.asset.relativePath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
         }
     }
-    private var saveSheet: some View {
+}
+private struct SaveLiveViewSheet: View {
+    @ObservedObject var model: WorkspaceModel
+    @Binding var saving: Bool
+    @Binding var viewName: String
+    var body: some View {
         VStack(alignment:.leading,spacing:20) {
-            Text("Save this view").font(.title3.weight(.semibold))
+            Text("Save this live view").font(.title3.weight(.semibold))
+            Text("Saves the recipe, not a fixed set of photos. New matching photos appear as indexing finishes.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             TextField("View name",text:$viewName).textFieldStyle(.roundedBorder)
-            Text("\(model.recipe.sourceIDs.isEmpty ? "All sources" : "Selected sources") · Group by \(model.recipe.grouping.title.lowercased()) · \(model.recipe.sorting.title)")
+            Text("\(model.recipe.sourceIDs.isEmpty ? "All sources" : "Selected sources") · Group by \(model.recipe.grouping.title.lowercased()) · \(model.isRankedSearch ? "Similarity" : model.recipe.sorting.title)")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button("Cancel",role:.cancel) { saving = false }.keyboardShortcut(.cancelAction)
