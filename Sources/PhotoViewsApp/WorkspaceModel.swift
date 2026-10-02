@@ -13,7 +13,7 @@ import PhotoViewsCore
     @Published var savedViews: [SavedView] = []
     @Published var recipe = ViewRecipe()
     @Published var selectedSavedView: UUID?
-    @Published var showInspector = true
+    @Published var showInspector = false
     @Published var errorMessage: String?
     @Published var availability: [UUID: String] = [:]
     @Published var isReady = false
@@ -34,6 +34,9 @@ import PhotoViewsCore
     @Published var formats: [String] = []
     @Published var queryPlan: QueryPlan?
     @Published var visualCoverage = SearchCoverage(total:0,embedded:0,failed:0)
+    @Published var paletteCoverage = PaletteCoverage(total:0,prepared:0,failed:0)
+    @Published var paletteIndexing = false
+    @Published var paletteError: String?
     @Published var visualIndexing = false
     @Published var visualPaused = false
     static let modelVersion = "openclip-vit-b32-1a25a446712ba5ee05982a381eed697ef9b435cf:imageio-m2-v1:search-v1"
@@ -76,6 +79,7 @@ import PhotoViewsCore
                 mountObservers.append(NSWorkspace.shared.notificationCenter.addObserver(forName:name,object:nil,queue:.main) { [weak self] _ in Task { @MainActor in self?.refreshAccess() } })
             }
             refreshAssets()
+            startPaletteIndexing()
             visualPaused = UserDefaults.standard.bool(forKey:"visualIndexingPaused")
             if !visualPaused { startVisualIndexing() }
             let interrupted = sources.filter { source in indexProgress.contains { $0.sourceID == source.id && ["discovering","indexing"].contains($0.state) } }
@@ -96,7 +100,7 @@ import PhotoViewsCore
         savedViews.first(where:{$0.id == selectedSavedView}).map { $0.recipe != recipe } ?? false
     }
     var needsCurrentSearchModel: Bool {
-        isRankedSearch && ((recipe.modelVersion != nil && recipe.modelVersion != Self.modelVersion) ||
+        usesVisualVectors && ((recipe.modelVersion != nil && recipe.modelVersion != Self.modelVersion) ||
             (recipe.rankingVersion != nil && recipe.rankingVersion != Self.rankingVersion))
     }
     func useCurrentSearchModel() {
@@ -285,7 +289,9 @@ import PhotoViewsCore
     }
     var hasSearch: Bool { !recipe.search.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || recipe.referenceAssetID != nil }
     var hasFilters: Bool { recipe.filters != ExactFilters() }
-    var isRankedSearch: Bool { recipe.referenceAssetID != nil || (hasSearch && searchMode == "visual") }
+    var usesVisualVectors: Bool { recipe.referenceAssetID != nil || (hasSearch && searchMode == "visual") }
+    var resultOrderingTitle: String { recipe.palette != nil ? (usesVisualVectors ? "Visual + palette" : "Palette coverage") : isRankedSearch ? "Similarity" : recipe.sorting.title }
+    var isRankedSearch: Bool { recipe.palette != nil || recipe.referenceAssetID != nil || (hasSearch && searchMode == "visual") }
     var referencePhoto: IndexedAsset? {
         guard let id = recipe.referenceAssetID else { return nil }
         return try? catalog?.indexedAssets(limit:1,assetID:id).first
@@ -308,12 +314,25 @@ import PhotoViewsCore
         if let format = filters.format { parts.append(format) }
         return parts.joined(separator:" · ")
     }
-    func interpretQuery() { queryPlan = QueryInterpreter.interpret(recipe.search,filters:recipe.filters,cameras:cameras,lenses:lenses,formats:formats) }
+    @discardableResult func resolveSearchInput(apply: Bool = true) -> Bool {
+        guard searchMode == "visual", recipe.referenceAssetID == nil else { return false }
+        let extracted = PaletteSearch.extract(from:recipe.search)
+        var plan = QueryInterpreter.interpret(extracted.intent,filters:recipe.filters,cameras:cameras,lenses:lenses,formats:formats)
+        plan.input = recipe.search; plan.palette = extracted.palette ?? recipe.palette
+        if extracted.ambiguous { plan.ambiguities.append("Choose one overall palette color in Filters.") }
+        guard extracted.palette != nil || extracted.ambiguous || !plan.canApply || plan.grouping != nil || plan.filters != recipe.filters || plan.visualIntent != recipe.search.trimmingCharacters(in:.whitespacesAndNewlines) else { return false }
+        queryPlan = plan; searchError = nil
+        if plan.canApply && apply { applyQueryPlan(); persistRecipe() }
+        else { searching = false; assets = []; resultCount = 0 }
+        return true
+    }
+    func submitSearch() { if !resolveSearchInput() { refreshAssets() } }
+    func interpretQuery() { _ = resolveSearchInput() }
     func applyQueryPlan() {
         guard var plan = queryPlan else { return }
         QueryInterpreter.validate(&plan)
         guard plan.canApply else { queryPlan = plan; return }
-        recipe.search = plan.visualIntent; recipe.filters = plan.filters
+        recipe.search = plan.visualIntent; recipe.filters = plan.filters; recipe.palette = plan.palette
         if let group = plan.grouping { recipe.grouping = group }
         searchMode = "visual"; queryPlan = nil
     }
@@ -342,12 +361,14 @@ import PhotoViewsCore
         searchTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds:180_000_000)
             guard !Task.isCancelled, let self else { return }
+            if self.resolveSearchInput(apply:false) { return }
             self.searchBridge.request(payload,as:SearchResult.self) { [weak self] response in
                 guard let self, self.searchGeneration == generation else { return }
                 self.searching = false
                 switch response {
                 case .success(let result):
                     self.searchError = nil
+                    self.paletteCoverage = result.paletteCoverage ?? PaletteCoverage(total:0,prepared:0,failed:0)
                     self.tagCoverage = result.tagCoverage ?? TagCoverage(total:0,prepared:0)
                     self.tagVocabularyVersion = result.tagVersion
                     self.assets = result.assets.map { self.normalizeCache($0) }
@@ -371,6 +392,26 @@ import PhotoViewsCore
         if let path = asset.thumbnailPath, !FileManager.default.fileExists(atPath:path) { asset.thumbnailPath = nil }
         if let path = asset.analysisPath, !FileManager.default.fileExists(atPath:path) { asset.analysisPath = nil }
         return asset
+    }
+    func startPaletteIndexing(retry: Bool = false) {
+        guard isReady, !paletteIndexing else { return }
+        paletteIndexing = true; paletteError = nil
+        indexPaletteBatch(retry:retry)
+    }
+    private func indexPaletteBatch(retry: Bool = false) {
+        searchBridge.request(["op":"palettes","limit":32,"retry":retry],as:PaletteProgress.self) { [weak self] response in
+            guard let self else { return }
+            switch response {
+            case .success(let progress):
+                if progress.processed == 0 || progress.remaining == 0 {
+                    self.paletteIndexing = false; self.refreshAssets()
+                } else {
+                    if self.recipe.palette != nil { self.refreshAssets() }
+                    self.indexPaletteBatch()
+                }
+            case .failure(let error): self.paletteIndexing = false; self.paletteError = error.localizedDescription
+            }
+        }
     }
     func startVisualIndexing() {
         guard isReady, !visualIndexing else { return }
@@ -429,6 +470,7 @@ import PhotoViewsCore
                     }
                 }
                 self.refreshAssets()
+                self.startPaletteIndexing()
                 if !self.visualPaused { self.startVisualIndexing() }
             }
         })
@@ -436,7 +478,7 @@ import PhotoViewsCore
     }
     func pauseIndexing() { pausing = true; indexer.pause() }
     func selectAsset(_ id: UUID) {
-        selectedAssetID = id
+        selectedAssetID = id; showInspector = true
         retainedSelection = assets.first { $0.id == id } ?? (try? catalog?.indexedAssets(limit:1,assetID:id).first)
         refreshSelectedOrganization()
         try? catalog?.touchPreviews([id])

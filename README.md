@@ -6,7 +6,7 @@ Describe what you remember. Filter what you know. Group the results however you 
 
 ## Project state
 
-M0 probes demonstrate native preview generation and local retrieval on this Mac; acceptance limitations are tracked in [M0_STATUS.md](M0_STATUS.md). M3 connects resumable indexing and real-photo browsing to local visual/filename search, exact camera/date/folder filters, and Find Similar.
+M0 probes demonstrate native preview generation and local retrieval on this Mac; acceptance limitations are tracked in [M0_STATUS.md](M0_STATUS.md). M1–M7 connect indexing, local retrieval, live views, organization, metadata constraints and drive recovery. The approved quiet photo canvas revision adds a flowing gallery and local overall-palette search.
 Target development/demo machine: Apple Silicon MacBook Pro (M5 Max, 48 GB).
 Broad RAW support is the goal; support claims require camera/variant fixtures, not extension lists.
 
@@ -14,7 +14,7 @@ Broad RAW support is the goal; support claims require camera/variant fixtures, n
 
 - [Requirements](prd.md)
 - [Product context](PRODUCT.md)
-- [Selected design seed](DESIGN.md)
+- [Design system](DESIGN.md)
 - [Workspace brief](.impeccable/surfaces/main-workspace.md)
 - [UX plan](UX_PLAN.md)
 - [Implementation milestones](IMPLEMENTATION_MILESTONES.md)
@@ -39,9 +39,9 @@ The catalog is stored in `~/Library/Application Support/Photo Views/catalog.sqli
 
 ## Search on this Mac
 
-Type a description such as “cars at night” in the **Visual** search field. Switch its mode to **Filename** for filenames, folder paths or tags, including unconfirmed model suggestions. **Filters** expands camera, folder and inclusive capture-date constraints; the applied constraints remain visible after closing it. **View** contains grouping, sorting and saved-view actions. Select a photo and choose **Find Similar**; **Exit Similar** returns to browsing while retaining filters.
+Type a description such as “cars at night” in **Describe a photo…**. Use Command-F to focus search. **View → Search → Filename or keyword** searches filenames, folder paths or tags, including unconfirmed suggestions. **Filters** expands camera, folder and inclusive capture-date constraints; the applied constraints remain visible after closing it. **View** contains grouping, sorting and saved-view actions. Select a photo and choose **Find Similar**; **Exit Similar** returns to browsing while retaining filters.
 
-The coverage disclosure shows which photos have visual embeddings and exposes separate preview/visual indexing controls. Visual searches return up to 100 nearest candidates, not guaranteed matches or confidence percentages. Exact filters are never broadened. Filename search also works for indexed photos without visual embeddings.
+The small result/indexing status disclosure shows which photos have visual embeddings and exposes separate preview/visual indexing controls. Visual searches return up to 100 nearest candidates, not guaranteed matches or confidence percentages. Exact filters are never broadened. Filename search also works for indexed photos without visual embeddings.
 
 This remains a local developer build, not a self-contained distributable. It reuses the externally stored M0 environment and pinned model under `~/Library/Caches/PhotoViews/m0/{venv,model}`. `PHOTO_VIEWS_PYTHON` and `PHOTO_VIEWS_MODEL` override those locations. Reproduce the environment with [M0 setup](spikes/m0/README.md); inference uses only local files with offline flags and never downloads from the app. The app bundles the versioned JSON-line worker script, while Python/packages/weights remain outside Git. Worker diagnostics stay beside the local catalog.
 
@@ -53,11 +53,11 @@ Run retrieval invariants using the configured Python environment:
 
 The local default on this development Mac is `~/Library/Caches/PhotoViews/m0/venv/bin/python`. Real-fixture probe arguments and the evidence/limitations are recorded in [M3 status](M3_STATUS.md).
 
-M4 adds live saved views: use **View → Group by** to regroup the current results, then **Save View…**. **Unsaved changes** marks edits; **Update View** stores them and **Revert Changes** restores the saved recipe. **Refresh Results** checks current membership. Saved views include new matching indexed photos automatically and survive relaunch, including any unsaved draft.
+M4 adds live saved views: use **View → Group by** to regroup the current results, then **Save View…**. A small changed-state indicator marks edits; **Update View** stores them and **Revert Changes** restores the saved recipe. **Refresh Results** checks current membership. Saved views include new matching indexed photos automatically and survive relaunch, including any unsaved draft.
 
 M5 adds **View → Group by → Primary subject**, with suggested groups labeled explicitly and an Unknown subject bucket. In the details sidebar, accept/reject/edit suggestions or add custom confirmed tags. **Filters → Confirmed tags → Apply Tags** requires every listed tag to be confirmed; separate names with commas. **Favorite** adds the selected asset to Favorites. Create a manual collection in the sidebar, then use the selected photo’s **Collections** menu to toggle membership. Collections store explicit choices; saved views store live recipes. Decisions stay in the catalog and survive restart/reindexing, without writing metadata to originals. The starter vocabulary is people, animals, cars, buildings, food, mountains, water, and vegetation. Local calibration evidence and remaining accuracy limits are in [M5 status](M5_STATUS.md).
 
-M6 expands **Filters → More metadata** with lens, format, ISO, f-number, shutter seconds and original dimensions. In Visual mode, **Interpret** reviews supported clauses such as `cars at night camera:"NIKON Z f" folder:Japan iso<=200 group by month`. **Apply Plan** keeps the visual intent, applies exact constraints and opens their editable controls. Unknown/ambiguous and unsupported directives block application; Syntax Help explains the bounded grammar. Full syntax and acceptance limits are in [M6 status](M6_STATUS.md).
+M6 expands **Filters → More metadata** with lens, format, ISO, f-number, shutter seconds and original dimensions. In natural-language mode, press Return to apply supported clauses such as `cars at night camera:"NIKON Z f" folder:Japan iso<=200 group by month`. Recognized constraints become removable chips; expand Filters to edit their values. Unknown/ambiguous and unsupported directives show a correction panel and block execution; Syntax Help explains the bounded grammar. Full syntax and acceptance limits are in [M6 status](M6_STATUS.md).
 
 ## Drive recovery and RAW+JPEG pairs
 
@@ -66,3 +66,13 @@ Search and cached previews stay usable when a photo drive is disconnected. Recon
 View → Collapse RAW + JPEG shows qualifying pairs once. Click a photo and choose either file in Details to inspect its own metadata, tags and availability. Separate Pair survives rescans; View → Restore Automatic Pairs reverses separation in the current source scope. Exact filters apply to each file before pairs collapse. Indexing coverage counts files; the collapsed gallery counts logical photos.
 
 M7 implementation and measured limits: [M7_STATUS.md](M7_STATUS.md).
+
+## Image-first gallery and dominant colors
+
+Navigation and the inspector start hidden; the toolbar exposes them, and selecting a photo opens Details. The gallery uses lazy flowing columns, full image proportions and narrow gutters. Filenames and metadata remain in Details. Filters expands only when requested; active exact constraints are individually removable.
+
+Use **Filters → Overall palette** to select a named color and its minimum image area, or type `mostly blue` / `predominantly blue` and press Return. A family must be the image’s largest color family and meet the area threshold (default 25%). `Blue car` remains a visual description. Color constraints combine with descriptions and exact filters; saved views persist them.
+
+Palette analysis uses existing sRGB previews in bounded local batches. It needs the configured Python runtime/Pillow but no model inference or downloads. Partial coverage remains visible during color search. Cached palettes work after preview eviction or drive disconnection; rebuilding a missing preview and retrying palette analysis repairs failures. This is a coarse histogram, not object detection or calibrated perceptual matching.
+
+Revision evidence and remaining native handoff: [CANVAS_STATUS.md](CANVAS_STATUS.md).

@@ -9,7 +9,8 @@ private enum Workbench {
 }
 struct WorkspaceView: View {
     @ObservedObject var model: WorkspaceModel
-    @State private var sidebarVisible = true
+    @AppStorage("gallerySidebarVisible") private var sidebarVisible = false
+    @FocusState private var searchFocused: Bool
     @State private var saving = false
     @State private var creatingCollection = false
     @State private var collectionName = ""
@@ -44,6 +45,9 @@ struct WorkspaceView: View {
                 Button { sidebarVisible.toggle() } label: { Label("Sidebar",systemImage:"sidebar.left") }
                     .help("Show or hide sources and saved views")
             }
+            ToolbarItem {
+                Button { searchFocused = true } label: { Label("Search",systemImage:"magnifyingglass") }.keyboardShortcut("f",modifiers:.command)
+            }
             ToolbarItem(placement:.primaryAction) {
                 Button { model.chooseFolder() } label: { Label("Add Folder",systemImage:"folder.badge.plus") }
                     .disabled(!model.isReady)
@@ -53,6 +57,7 @@ struct WorkspaceView: View {
                     .help("Show or hide details")
             }
         }
+        .onChange(of:model.selectedAssetID) { _,id in if id == nil { model.showInspector = false } }
         .onChange(of:model.recipe.search) { _,text in if model.queryPlan?.input != text { model.queryPlan = nil } }
         .onChange(of:model.searchMode) { _,_ in model.queryPlan = nil }
         .onChange(of:model.recipe) { _,_ in model.persistRecipe() }
@@ -130,36 +135,98 @@ struct WorkspaceView: View {
         }
     }
     private var recipeBar: some View {
-        VStack(alignment:.leading,spacing:12) {
-            if let reference = model.referencePhoto {
-                HStack(spacing:8) {
-                    CachedPhoto(path:reference.thumbnailPath,revision:reference.id.uuidString).frame(width:40,height:32)
-                    Text("Similar to \(reference.filename)").font(.subheadline).lineLimit(1)
+        VStack(alignment:.leading,spacing:8) {
+            HStack(spacing:8) {
+                if let reference = model.referencePhoto {
+                    CachedPhoto(path:reference.thumbnailPath,revision:reference.id.uuidString).frame(width:32,height:24)
+                    Text("Similar photo").font(.subheadline)
                     Spacer()
                     Button("Exit Similar") { model.exitSimilar() }
-                }
-            } else {
-                HStack(spacing:8) {
+                } else {
                     Image(systemName:"magnifyingglass").foregroundStyle(.secondary)
                     TextField(model.searchMode == "visual" ? "Describe a photo…" : "Search filenames or folders…",text:$model.recipe.search)
                         .textFieldStyle(.plain).accessibilityLabel("Search photos")
                         .disabled(!model.isReady || model.sources.isEmpty)
+                        .focused($searchFocused).onSubmit { model.submitSearch() }
                     if !model.recipe.search.isEmpty {
                         Button { model.recipe.search = "" } label: { Image(systemName:"xmark.circle.fill") }.buttonStyle(.plain).accessibilityLabel("Clear search")
                     }
-                    Menu(model.searchMode == "visual" ? "Visual" : "Filename") {
-                        Picker("Search mode",selection:Binding(get:{ model.searchMode },set:{ model.searchMode = $0 })) {
-                            Text("Visual description").tag("visual")
-                            Text("Filename or keyword").tag("filename")
-                        }
-                    }.fixedSize().help("Choose visual descriptions or literal filename and keyword matching")
                 }
-                Text(model.searchMode == "visual" ? "Try “cars at night” or “a mountain lake”. Results are ranked by visual similarity." : "Matches filenames, folder paths and tags, including unconfirmed suggestions.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                Button { filtersVisible.toggle() } label: { Label("Filters",systemImage:"line.3.horizontal.decrease") }
+                    .help("Expand photo filters").accessibilityValue(filtersVisible ? "Expanded" : model.hasFilters || model.recipe.palette != nil ? "Active filters" : "Collapsed")
+                viewOptions
+                if model.hasUnsavedChanges { Image(systemName:"circle.fill").font(.system(size:5)).accessibilityLabel("Unsaved view changes").help("Unsaved view changes") }
+                if model.searching { ProgressView().controlSize(.small).accessibilityLabel("Searching photos") }
             }
-            HStack(spacing:8) {
-                Button { filtersVisible.toggle() } label: { Label(filtersVisible ? "Hide Filters" : model.hasFilters ? "Filters •" : "Filters",systemImage:"line.3.horizontal.decrease") }
-                Menu(model.recipe.grouping == .none ? "View" : "View · \(model.recipe.grouping.title)") {
+            if model.recipe.palette != nil && model.paletteCoverage.prepared < model.paletteCoverage.total {
+                HStack {
+                    Text("Palette analyzed: \(model.paletteCoverage.prepared) / \(model.paletteCoverage.total) files").font(.caption).foregroundStyle(.secondary)
+                    if model.paletteIndexing { ProgressView().controlSize(.small) }
+                    else { Button("Analyze Palettes") { model.startPaletteIndexing(retry:true) }.controlSize(.small) }
+                }
+            }
+            if model.needsCurrentSearchModel {
+                VStack(alignment:.leading,spacing:8) {
+                    Text("This view uses a different search model. Changing it may change the results.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                    Button("Use Current Search Model") { model.useCurrentSearchModel() }
+                }
+            }
+            if let plan = model.queryPlan {
+                if plan.canApply {
+                    HStack {
+                        Text("Press Return to apply recognized constraints").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Search") { model.applyQueryPlan(); model.persistRecipe() }.controlSize(.small)
+                    }
+                } else {
+                VStack(alignment:.leading,spacing:8) {
+                    HStack { Text(plan.canApply ? "Press Return to search" : "Review query").font(.headline); Spacer(); Button("Dismiss") { model.queryPlan = nil; queryHelp = false } }
+                    ScrollView {
+                        VStack(alignment:.leading,spacing:8) {
+                            TextField("Visual intent",text:Binding(get:{ model.queryPlan?.visualIntent ?? "" },set:{ model.queryPlan?.visualIntent = $0 })).textFieldStyle(.roundedBorder).accessibilityLabel("Interpreted visual intent")
+                            let summary = model.filterDescription(plan.filters)
+                            Text(summary.isEmpty ? "No exact constraints recognized" : summary).font(.caption).fixedSize(horizontal:false,vertical:true)
+                            if let palette = plan.palette { Text("Dominant \(palette.color) · at least \(Int(palette.minimumFraction*100))% of image area").font(.caption) }
+                            if let grouping = plan.grouping { Text("Group by: \(grouping.title)").font(.caption) }
+                            ForEach(plan.ambiguities,id:\.self) { Text($0).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
+                            ForEach(plan.unsupported,id:\.self) { Text("Unsupported clause: "+$0).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
+                            Text("Only listed clauses become exact filters. Remaining words stay visual. Edit constraints in Filters after applying.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                        }
+                    }
+                    HStack { Button("Apply Plan") { model.applyQueryPlan(); model.persistRecipe(); queryHelp = false }.disabled(!plan.canApply); Button("Syntax Help") { queryHelp.toggle() } }
+                }.padding(.top,8).frame(height:180)
+            }
+                }
+            if queryHelp {
+                ScrollView { Text("Examples: cars at night camera:\"NIKON Z f\" folder:Japan group by month; on:2025-11-06; iso>=400; aperture<=2.8; shutter<=1/500; width>=4000; tag:cars. Quote multiword values. today/yesterday use this Mac’s timezone. Strict >/< and arbitrary date phrases need manual filters.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }.frame(height:70)
+            }
+            if filtersVisible {
+                Divider()
+                ScrollView { filterControls.frame(maxWidth:.infinity,alignment:.leading) }.frame(height:max(120,min(280,availableHeight - 250)))
+            }
+            if model.hasFilters || model.recipe.palette != nil {
+                ScrollView(.horizontal,showsIndicators:false) {
+                    HStack(spacing:6) {
+                        ForEach(model.activeFilterChips,id:\.key) { chip in
+                            Button { model.removeFilter(chip.key) } label: { HStack(spacing:4) { Text(chip.title); Image(systemName:"xmark").font(.caption2) } }
+                                .controlSize(.small).accessibilityLabel("Remove filter: "+chip.title)
+                        }
+                        if let palette = model.recipe.palette {
+                            Button { model.recipe.palette = nil } label: { HStack(spacing:4) { Text("Dominant \(palette.color) ≥ \(Int(palette.minimumFraction*100))%"); Image(systemName:"xmark").font(.caption2) } }
+                                .controlSize(.small).accessibilityLabel("Remove overall palette filter")
+                        }
+                    }
+                }
+            }
+        }.padding(.horizontal,12).padding(.vertical,10)
+    }
+    private var viewOptions: some View {
+        Menu(model.recipe.grouping == .none ? "View" : "View · \(model.recipe.grouping.title)") {
+                    Picker("Search",selection:Binding(get:{ model.searchMode },set:{ model.searchMode = $0 })) {
+                        Text("Natural language").tag("visual")
+                        Text("Filename or keyword").tag("filename")
+                    }
+                    Divider()
                     Picker("Group by",selection:$model.recipe.grouping) {
                         ForEach(Grouping.allCases) { Text($0.title).tag($0) }
                     }
@@ -178,57 +245,32 @@ struct WorkspaceView: View {
                     Button("Restore Automatic Pairs") { model.restorePairs() }
                     Button("Refresh Results") { model.refreshAssets() }
                 }.help("Group, sort or save this view")
-                if model.searchMode == "visual" && !model.recipe.search.isEmpty { Button("Interpret") { filtersVisible = false; queryHelp = false; model.interpretQuery() }.accessibilityLabel("Interpret Query").help("Review supported query clauses as editable exact filters") }
-                Spacer(minLength:0)
-                if model.hasUnsavedChanges { Text("Unsaved changes").font(.caption).foregroundStyle(.secondary) }
-                if model.searching { ProgressView().controlSize(.small).accessibilityLabel("Searching photos") }
-            }
-            if model.selectedSavedView != nil {
-                Text("Live view · New matching photos appear as indexing finishes.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-            }
-            if model.needsCurrentSearchModel {
-                VStack(alignment:.leading,spacing:8) {
-                    Text("This view uses a different search model. Changing it may change the results.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-                    Button("Use Current Search Model") { model.useCurrentSearchModel() }
-                }
-            }
-            if let plan = model.queryPlan {
-                VStack(alignment:.leading,spacing:8) {
-                    HStack { Text("Review query").font(.headline); Spacer(); Button("Dismiss") { model.queryPlan = nil; queryHelp = false } }
-                    ScrollView {
-                        VStack(alignment:.leading,spacing:8) {
-                            TextField("Visual intent",text:Binding(get:{ model.queryPlan?.visualIntent ?? "" },set:{ model.queryPlan?.visualIntent = $0 })).textFieldStyle(.roundedBorder).accessibilityLabel("Interpreted visual intent")
-                            let summary = model.filterDescription(plan.filters)
-                            Text(summary.isEmpty ? "No exact constraints recognized" : summary).font(.caption).fixedSize(horizontal:false,vertical:true)
-                            if let grouping = plan.grouping { Text("Group by: \(grouping.title)").font(.caption) }
-                            ForEach(plan.ambiguities,id:\.self) { Text($0).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
-                            ForEach(plan.unsupported,id:\.self) { Text("Unsupported clause: "+$0).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
-                            Text("Only listed clauses become exact filters. Remaining words stay visual. Edit constraints in Filters after applying.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-                        }
-                    }
-                    HStack { Button("Apply Plan") { model.applyQueryPlan(); queryHelp = false; filtersVisible = true }.disabled(!plan.canApply); Button("Syntax Help") { queryHelp.toggle() } }
-                }.padding(.top,8).frame(height:180)
-            }
-            if queryHelp {
-                ScrollView { Text("Examples: cars at night camera:\"NIKON Z f\" folder:Japan group by month; on:2025-11-06; iso>=400; aperture<=2.8; shutter<=1/500; width>=4000; tag:cars. Quote multiword values. today/yesterday use this Mac’s timezone. Strict >/< and arbitrary date phrases need manual filters.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }.frame(height:70)
-            }
-            if filtersVisible {
-                Divider()
-                ScrollView { filterControls.frame(maxWidth:.infinity,alignment:.leading) }.frame(height:max(100,min(260,availableHeight - 440)))
-            }
-            if model.hasFilters {
-                HStack(alignment:.top,spacing:8) {
-                    Text(model.filterSummary).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-                    Spacer(minLength:0)
-                    Button("Clear Filters") { model.clearFilters() }.font(.caption)
-                }
-            }
-        }.padding(Workbench.contentInset)
     }
     private var filterControls: some View {
         VStack(alignment:.leading,spacing:16) {
             HStack { Text("Filter photos").font(.headline); Spacer(); Button("Done") { filtersVisible = false } }
-            Text("Only photos matching every filter are shown.").font(.caption).foregroundStyle(.secondary)
+            VStack(alignment:.leading,spacing:8) {
+                Text("Overall palette").font(.subheadline)
+                LazyVGrid(columns:[GridItem(.adaptive(minimum:70))],spacing:6) {
+                    ForEach(PaletteSearch.colors,id:\.self) { color in
+                        Button { model.recipe.palette = PaletteSearch(color:color,minimumFraction:model.recipe.palette?.minimumFraction ?? 0.25) } label: {
+                            HStack(spacing:4) { Circle().fill(paletteColor(color)).frame(width:10,height:10).overlay(Circle().stroke(.secondary,lineWidth:0.5)); Text(color.capitalized) }
+                        }.controlSize(.small).tint(model.recipe.palette?.color == color ? .accentColor : nil)
+                            .accessibilityValue(model.recipe.palette?.color == color ? "Selected" : "Not selected")
+                    }
+                }
+                if let palette = model.recipe.palette {
+                    HStack {
+                        Text("Image area")
+                        Slider(value:Binding(get:{ model.recipe.palette?.minimumFraction ?? 0.25 },set:{ model.recipe.palette?.minimumFraction = $0 }),in:0.05...1,step:0.05)
+                            .accessibilityLabel("Minimum area occupied by overall palette color")
+                        Text("\(Int((palette.minimumFraction*100).rounded()))%").monospacedDigit().frame(width:40)
+                    }
+                    Button("Clear Color") { model.recipe.palette = nil }.controlSize(.small)
+                }
+                Text("Finds the largest color family in the image. Image area sets its minimum share.").font(.caption).foregroundStyle(.secondary)
+            }
+            Divider()
             Picker("Camera",selection:Binding(get:{ model.recipe.filters.camera ?? "" },set:{ model.recipe.filters.camera = $0.isEmpty ? nil : $0 })) {
                 Text("Any camera").tag("")
                 ForEach(Array(Set(model.cameras + [model.recipe.filters.camera].compactMap { $0 })).sorted(),id:\.self) { Text($0).tag($0) }
@@ -270,8 +312,16 @@ struct WorkspaceView: View {
                     Text("Limits are inclusive. Blank means any value. Photos with unknown metadata are excluded when that constraint is active. Width and height use original recorded dimensions.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                 }.padding(.top,8)
             }
-            Button("Clear All Filters") { confirmedTagDraft = ""; model.clearFilters() }.disabled(!model.hasFilters)
-        }.padding(20).frame(width:320)
+            Button("Clear All Filters") { confirmedTagDraft = ""; model.clearFilters(); model.recipe.palette = nil }.disabled(!model.hasFilters && model.recipe.palette == nil)
+        }.padding(12).frame(maxWidth:.infinity,alignment:.leading)
+    }
+    private func paletteColor(_ name: String) -> Color {
+        switch name {
+        case "red": return .red; case "orange": return .orange; case "yellow": return .yellow
+        case "green": return .green; case "cyan": return .cyan; case "blue": return .blue
+        case "purple": return .purple; case "pink": return .pink; case "brown": return .brown
+        case "black": return .black; case "white": return .white; default: return .gray
+        }
     }
     private func applyConfirmedTags() {
         model.recipe.filters.confirmedTags = Array(Set(confirmedTagDraft.split(separator:",").map { $0.trimmingCharacters(in:.whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty })).sorted()
@@ -297,7 +347,7 @@ struct WorkspaceView: View {
                 Button("Browse All Photos") { model.selectAll() }
             }
         } else if model.assets.isEmpty && (model.hasSearch || model.hasFilters) {
-            emptyState(icon:"magnifyingglass",title:model.searching ? "Searching photos…" : "No matching photos",detail:model.isRankedSearch && model.visualCoverage.total > 0 && model.visualCoverage.embedded == 0 ? "Visual indexing needs to finish some photos first. You can use Filename search now." : "Try another search or edit the filters. Your filters have not been relaxed.") {
+            emptyState(icon:"magnifyingglass",title:model.searching ? "Searching photos…" : "No matching photos",detail:model.usesVisualVectors && model.visualCoverage.total > 0 && model.visualCoverage.embedded == 0 ? "Visual indexing needs to finish some photos first. You can use Filename search now." : "Try another search or edit the filters. Your filters have not been relaxed.") {
                 if model.hasFilters { Button("Clear Filters") { model.clearFilters() } }
                 if model.hasSearch { Button("Clear Search") { model.exitSimilar() } }
             }
@@ -350,7 +400,7 @@ struct WorkspaceView: View {
                     Text("View recipe").font(.subheadline.weight(.semibold))
                     LabeledContent("Sources",value:model.recipe.sourceIDs.isEmpty ? "All sources" : "Selected sources")
                     LabeledContent("Group by",value:model.recipe.grouping.title)
-                    LabeledContent("Sort",value:model.isRankedSearch ? "Similarity" : model.recipe.sorting.title)
+                    LabeledContent("Sort",value:model.resultOrderingTitle)
                     if model.selectedSavedView != nil {
                         Text(model.hasUnsavedChanges ? "Changes haven’t been saved." : "Saved view settings")
                             .font(.caption).foregroundStyle(.secondary)
@@ -375,6 +425,12 @@ struct WorkspaceView: View {
                             Spacer()
                             Button(model.visualIndexing ? (model.visualPaused ? "Pausing…" : "Pause Visual Indexing") : "Build Visual Index") { if model.visualIndexing { model.pauseVisualIndexing() } else { model.startVisualIndexing() } }.disabled(model.visualIndexing && model.visualPaused)
                         }
+                        HStack {
+                            Text("Palette: \(model.paletteCoverage.prepared) / \(model.paletteCoverage.total) files · \(model.paletteCoverage.failed) unavailable")
+                            Spacer()
+                            Button(model.paletteIndexing ? "Analyzing…" : "Retry Palette Analysis") { model.startPaletteIndexing(retry:true) }.disabled(model.paletteIndexing)
+                        }.font(.caption)
+                        if let error = model.paletteError { Text(error).font(.caption).foregroundStyle(.secondary) }
                         Text("Files with tag suggestions: \(model.tagCoverage.prepared) of \(model.tagCoverage.total)").font(.caption).foregroundStyle(.secondary)
                         if model.visualCoverage.failed > 0 {
                             Text("\(model.visualCoverage.failed) photos need attention").font(.caption)
@@ -392,10 +448,12 @@ struct WorkspaceView: View {
                 } label: {
                     HStack(spacing:8) {
                         if model.indexing || model.visualIndexing { ProgressView().controlSize(.small) }
-                        Text("\(model.visualCoverage.embedded) of \(model.visualCoverage.total) files visually indexed")
+                        Text(model.isRankedSearch ? "\(model.assets.count) ranked photos" : "\(model.resultCount) photos")
+                        Spacer()
+                        Text("Indexed \(model.visualCoverage.embedded) / \(model.visualCoverage.total)")
                             .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                     }
-                }.padding(.horizontal,20).padding(.vertical,10)
+                }.padding(.horizontal,12).padding(.vertical,6)
             }
         }
     }
@@ -459,7 +517,8 @@ private struct SaveLiveViewSheet: View {
             Text("Save this live view").font(.title3.weight(.semibold))
             Text("Saves the recipe, not a fixed set of photos. New matching photos appear as indexing finishes.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             TextField("View name",text:$viewName).textFieldStyle(.roundedBorder)
-            Text("\(model.recipe.sourceIDs.isEmpty ? "All sources" : "Selected sources") · Group by \(model.recipe.grouping.title.lowercased()) · \(model.isRankedSearch ? "Similarity" : model.recipe.sorting.title)")
+            if let palette = model.recipe.palette { Text("Dominant \(palette.color) ≥ \(Int(palette.minimumFraction*100))% of image area").font(.caption) }
+            Text("\(model.recipe.sourceIDs.isEmpty ? "All sources" : "Selected sources") · Group by \(model.recipe.grouping.title.lowercased()) · \(model.resultOrderingTitle)")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button("Cancel",role:.cancel) { saving = false }.keyboardShortcut(.cancelAction)

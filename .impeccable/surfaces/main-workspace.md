@@ -1,61 +1,46 @@
-# Main workspace — Photo Workbench
+# Main workspace — Quiet photo canvas
 
-Status: direction selected by the user, 2026-10-02; pre-implementation brief.
+Status: revised direction approved by the user, 2026-10-02; implementation and rendered verification in progress.
+Primary target: Sources/PhotoViewsApp/WorkspaceView.swift
+Related target: Sources/PhotoViewsApp/PhotoGrid.swift
 
 ## Scope and mode
 
-Native macOS main workspace, **Operate** mode. Follow PRODUCT.md and prd.md for scope and product truth; DESIGN.md owns reusable visual rules. This brief specifies the selected first-surface expression without authorizing implementation or publication.
+Native macOS main workspace. Operate mode with photographs leading exploration. PRODUCT.md and prd.md retain product truth; this approved revision changes presentation and adds overall-palette search. Native controls, local processing, read-only originals, saved views, exact constraints, keyboard navigation and RAW+JPEG integrity remain binding.
 
 ## Direction contract
 
-**THESIS:** A photograph-led workbench turns retrieval into an understandable, reusable view. Use familiar panes; avoid a dashboard composition with summary cards competing for space.
+**THESIS:** A quiet photo canvas gives photographs the available window. One natural-language input leads retrieval; supporting controls appear when useful.
 
-**OWN-WORLD:** Appearance-aware neutral surfaces, SF system typography, native controls, quiet separators, and a clear selection accent. Distinction comes from consistent hierarchy and precise behavior.
+**OWN-WORLD:** Appearance-aware neutral canvas, SF typography, compact labeled native controls, flat panes and quiet separators. The first user reference (CAP's dark flowing gallery) is the composition authority: image scale, full proportions, narrow gutters and receding controls. The second reference contributes contextual details and organization, placed in optional panes rather than an always-open assistant. Neither reference supplies branding, claims or imagery for this product.
 
-**STORY:** Choose sources, describe or filter, inspect the results, regroup, then save the complete view. Each operation leaves its effect visible.
+**FIRST VIEWPORT:** Navigation and inspector begin hidden. One horizontal search row contains Describe a photo…, Filters and View. One small result/indexing status row precedes a broad image-only masonry gallery. No permanent example, syntax instructions, live-view explanation, cards or caption row. Existing saved grouping is respected; group headings remain compact.
 
-**FIRST VIEWPORT:** Source/saved-view sidebar; broad central search; editable constraints immediately below; unique count with labeled Group by and Sort controls; generous grouped photo grid; optional inspector. Coverage sits beside results, availability beside sources.
+**SIGNATURE:** Describe → inspect images → refine only as needed. Filters expands a bounded scrollable drawer. Each active exact constraint is individually removable; the palette constraint states its color and minimum area. Valid supported mixed queries apply on Return; ambiguous/unsupported clauses block execution for correction. Plain visual descriptions retain debounced retrieval. View contains filename/keyword mode, grouping, sorting, saving and pairing controls. Saved definitions update explicitly.
 
-**SIGNATURE:** The editable view recipe connects search, filters, grouping, sorting, and saving. Regrouping preserves the query, result membership, selection, and inspector where possible.
+**MOTION:** No entrance animation or whole-gallery animation. Stable result identity and scroll anchor preserve context during regrouping. Optional panes and filters remain understandable with immediate transitions and reduced motion.
 
-**MOTION:** Brief state transitions retain context. Large grids update without a whole-grid animation; reduced motion uses immediate changes.
+## Gallery and supporting panes
 
-## Layout and hierarchy
+- Full image proportions in lazy masonry columns; no cropping, filename, format or persistent overlay. Shortest-column placement packs space while preserving the ranking sequence used for placement.
+- Orientation-aware proportions from recorded dimensions. Missing dimensions use a square placeholder until metadata is available.
+- Narrow gutters and adaptive columns. Portraits receive their full height rather than letterboxing inside landscape cells.
+- Sidebar is reachable from the native toolbar and remembers visibility. A photo selection opens the inspector; the toolbar can close it. Unselected source details are optional rather than permanent competition for image space.
+- RAW+JPEG member switching retains the logical gallery highlight; metadata and organization remain per file. Space opens a larger preview; arrows navigate spatially across masonry cells. Focus and selection remain distinct.
 
-- Sidebar sections distinguish Sources, Saved Views, and Collections; Favorites is an accessible destination. Source rows show availability and indexing state without becoming progress dashboards.
-- Search is the broadest input. Exact constraints occupy a stable second row, wrapping when needed rather than disappearing. Grouping and sorting are labeled controls separate from membership filters.
-- Compact group headers name the bucket and its count. Show the unique result count separately when groups allow repeated memberships. Unknown is a real bucket.
-- Grid cells share stable geometry with aspect-preserving thumbnails. Do not expose all filenames and metadata under every image. Availability and pairing remain discoverable independently of hover.
-- Inspector places preview and relevant actions before metadata and tags. Use aligned metadata, separate Confirmed and Suggested tag sections, and direct accept/reject/edit actions.
+## Search and palette
 
-Pane sizes are adjustable; inspector and sidebar can collapse using discoverable controls. Core search/group/sort/save controls stay reachable at small window sizes. Verify exact limits on the selected macOS target.
+- Natural language is primary; filename/keyword mode remains in View. The interpreter supports its documented finite grammar and does not claim arbitrary metadata understanding.
+- Overall palette first, explicitly separate from colored objects. “Mostly blue” or “predominantly blue” sets a blue palette condition; “blue car” stays a visual description.
+- Analyze existing orientation-corrected sRGB derivatives locally in bounded background batches. Store versioned area histograms; unchanged cached palettes survive preview eviction and drive absence. Changed files invalidate palette data.
+- Selected family must be the largest histogram family and meet the chosen minimum area (default 25%). It does not mean a majority of pixels or detected objects. Expose named swatches and the area control inside Filters.
+- Palette coverage is visible when partial; unprepared/failed palettes do not silently match. Retry analysis is explicit after restoring previews. Exact metadata and per-file membership constrain candidates before combined ranking and pair collapse.
+- Color names include neutrals. This first deterministic classifier is a coarse preview palette, not a calibrated perceptual or object model; broad archive quality requires measurement.
 
-## View recipe behavior
+## Status and states
 
-1. Search accepts natural language and keywords. Interpreted exact constraints become editable labeled controls; unsupported or ambiguous input remains visible for correction.
-2. Filter changes alter membership. Group by changes presentation. Sort changes ordering. Never imply a grouping operation moves files.
-3. Save View captures sources, query, filters, grouping, and sorting, plus model/ranking settings required by the PRD. The native naming sheet summarizes the definition being saved.
-4. Editing a saved view shows a plain changed-state indicator. Provide explicit save/update behavior; do not overwrite the saved definition merely because controls changed.
-5. Find Similar shows the chosen reference image and a clear way to leave similarity mode. Keep exact constraints visible if they still apply.
+Keep result and indexing counts on one small row. Expand indexing controls/failures only on demand. Incomplete palette coverage remains visible during palette search. Sources report disconnection; originals report their own availability in the inspector. No-match states retain exact constraints. Catalog/worker errors remain actionable. No information is removed merely to make a successful screenshot quieter.
 
-## Selection and context
+## Verification
 
-Keyboard focus and selected photos have distinguishable treatments. Selection remains identifiable across grouping changes; preserve the selected-photo scroll anchor where possible. If a filter removes the selected photo, show the new result state and avoid silently selecting an unrelated image.
-
-Space opens the larger preview. RAW+JPEG members remain individually accessible, with per-asset metadata and availability. Offline opening requests reconnection while cached browsing continues.
-
-## Status placement
-
-- Show incomplete visual indexing coverage near the result count; metadata-ready photos remain useful.
-- Show disconnected sources in the sidebar and unavailable originals where users attempt access.
-- Failed files are individually inspectable, with actionable reasons; indexing continues.
-- Suggested tags are unconfirmed evidence, distinct from confirmed tags and failures.
-- No matches preserves the full recipe and offers explicit edits; do not silently relax constraints.
-
-## Native verification before implementation sign-off
-
-Review both system appearances, increased contrast, reduced motion, keyboard operation, window resizing, and selected-photo continuity. Exercise the PRD demo and offline/indexing/failure states on named hardware. Validate readable control labels and uncluttered grids using actual representative RAW/JPEG/HEIC fixtures. Placeholder images or synthetic counts cannot establish retrieval or performance results.
-
-## Remaining decisions
-
-Minimum macOS, actual layout measurements, semantic color implementations, icon choices, exact type/spacing/radius tokens, preview behavior details, and model/hardware/RAW fixture decisions. No buildPath preference was supplied by the choice, so none is stored. The next step for a rendered design requires its own concrete request; this brief completes planning.
+Review actual native wide and compact windows in both appearances, default gallery, expanded filters, active palette, selection/paired inspector and blocked query states. Local checks must cover schema migration, old/new recipe decoding, palette persistence and invalidation, missing previews, offline originals, exact constraints and collapsed-pair selection. No web detector or proxy capture applies to SwiftUI/AppKit. Full accessibility and measured retrieval/performance remain separately scoped evidence.

@@ -36,6 +36,7 @@ Primary workflow: select folders → browse while indexing → search and filter
 
 ## Capabilities and Constraints
 
+- Approved extension (2026-10-02): local overall-palette search, named colors and minimum image-area coverage; color-object detection remains outside this first version.
 - Required: recursive resumable indexing, validated RAW support, visual and keyword search, suggested tag correction, metadata filters, single-level grouping, saved views, query-by-image similarity, minimal collections/favorites/tag editing, and offline catalog access.
 - Implement camera/date/folder filters first; retain the PRD's remaining metadata requirements.
 - Group by folder, month, camera, or primary supported subject. Filters change membership; grouping changes presentation and never moves files. Missing values use Unknown.
@@ -50,7 +51,7 @@ Primary workflow: select folders → browse while indexing → search and filter
 
 ## Brand Commitments
 
-Working name: Photo Views. Native macOS behavior, three-pane workspace, standard folder picker, keyboard navigation, and Space for larger preview are binding UX requirements. The user selected Photo Workbench as the visual direction on 2026-10-02: minimal, bespoke, and intuitive, with neutral surfaces and familiar native controls. DESIGN.md records the selected seed; exact implementation tokens and a logo remain unestablished.
+Working name: Photo Views. Native macOS behavior, optional source/details panes, standard folder picker, keyboard navigation and Space for larger preview are binding UX requirements. The user revised Photo Workbench on 2026-10-02 toward a quiet photo canvas: full-proportion flowing gallery, compact natural-language search, filters expanded on demand, and contextual details. Their first reference sets image density and restraint; their second supplies useful contextual information. Preserve neutral system appearances and native controls. DESIGN.md records implemented tokens and components; the main-workspace brief carries this approved composition.
 
 ## Evidence on Hand
 

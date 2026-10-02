@@ -41,48 +41,33 @@ struct PhotoGrid: View {
     }
     var body: some View {
         GeometryReader { geometry in
-            let columns = max(1,Int((geometry.size.width-40+16)/176))
+            let columns = max(1,Int((geometry.size.width-24+8)/208))
+            let columnWidth = max(1,(geometry.size.width-24-CGFloat(columns-1)*8)/CGFloat(columns))
             ScrollViewReader { scroll in
                 ScrollView {
-                    LazyVStack(alignment:.leading,spacing:24) {
-                        Text(model.isRankedSearch ? "\(model.assets.count) nearest results · Ranked by similarity" : "\(model.assets.count) of \(model.resultCount) \(model.recipe.collapsePairs == false ? "files" : "photos") shown")
-                            .font(.caption).foregroundStyle(.secondary)
+                    LazyVStack(alignment:.leading,spacing:12) {
                         ForEach(groups) { group in
                             if !group.title.isEmpty {
                                 HStack { Text(group.title).font(.headline).lineLimit(1); Text("\(group.assets.count) loaded").font(.caption).foregroundStyle(.secondary) }
                             }
-                            LazyVGrid(columns:[GridItem(.adaptive(minimum:160),spacing:16)],spacing:20) {
-                                ForEach(group.assets) { asset in
-                                    Button {
-                                        model.selectAsset(asset.id); focused = true
-                                    } label: {
-                                        CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0))
-                                            .frame(maxWidth:.infinity).frame(height:128)
-                                            .background(Color(nsColor:.controlBackgroundColor))
-                                            .overlay { if model.isGallerySelection(asset) { Rectangle().strokeBorder(Color.accentColor,lineWidth:2) } }
-                                            .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .id(asset.id)
-                                    .background(GeometryReader { frame in
-                                        Color.clear.preference(key:VisiblePhotos.self,value:[asset.id:frame.frame(in:.named("photoScroll")).maxY])
-                                    })
-                                    .accessibilityLabel("\(asset.filename), \(asset.previewState == .failed ? "preview failed" : model.originalAvailable(asset) ? "original available" : "original offline")")
-                                    .contextMenu {
-                                        Button("Preview") { model.selectAsset(asset.id); model.previewPresented = true }
-                                        Button("Find Similar") { model.selectAsset(asset.id); model.findSimilar() }
-                                        Button("Reveal Original in Finder") { model.selectAsset(asset.id); model.revealPhoto() }
-                                    }
-                                    .simultaneousGesture(TapGesture(count:2).onEnded { model.selectAsset(asset.id); model.previewPresented = true })
+                            let layout = masonry(group.assets,columns:columns,width:columnWidth)
+                            HStack(alignment:.top,spacing:8) {
+                                ForEach(0..<columns,id:\.self) { column in
+                                    LazyVStack(spacing:8) {
+                                        ForEach(layout[column]) { asset in
+                                            photoCell(asset,height:columnWidth/aspectRatio(asset))
+                                        }
+                                    }.frame(width:columnWidth)
                                 }
                             }
                         }
                         if model.assets.count < model.resultCount {
                             Button("Load More Photos") { model.loadMore() }.onAppear { model.loadMore() }
                         }
-                    }.padding(20)
+                    }.padding(12)
                 }
                 .coordinateSpace(name:"photoScroll")
+                .overlay { if focused { Rectangle().strokeBorder(Color.accentColor.opacity(0.6),lineWidth:1).allowsHitTesting(false) } }
                 .onPreferenceChange(VisiblePhotos.self) { positions in
                     visibleAnchor = positions.filter { $0.value > 0 }.min { a,b in a.value == b.value ? a.key.uuidString < b.key.uuidString : a.value < b.value }?.key
                 }
@@ -91,20 +76,73 @@ struct PhotoGrid: View {
                 }
                 .focusable().focusEffectDisabled().focused($focused)
                 .onKeyPress(.space) { guard model.selectedAsset != nil else { return .ignored }; model.previewPresented = true; return .handled }
-                .onKeyPress(.leftArrow) { move(-1,scroll:scroll); return .handled }
-                .onKeyPress(.rightArrow) { move(1,scroll:scroll); return .handled }
-                .onKeyPress(.upArrow) { move(-columns,scroll:scroll); return .handled }
-                .onKeyPress(.downArrow) { move(columns,scroll:scroll); return .handled }
+                .onKeyPress(.leftArrow) { move(dx:-1,dy:0,columns:columns,width:columnWidth,scroll:scroll); return .handled }
+                .onKeyPress(.rightArrow) { move(dx:1,dy:0,columns:columns,width:columnWidth,scroll:scroll); return .handled }
+                .onKeyPress(.upArrow) { move(dx:0,dy:-1,columns:columns,width:columnWidth,scroll:scroll); return .handled }
+                .onKeyPress(.downArrow) { move(dx:0,dy:1,columns:columns,width:columnWidth,scroll:scroll); return .handled }
             }
         }
     }
-    private func move(_ offset: Int, scroll: ScrollViewProxy) {
-        let ordered = groups.flatMap { $0.assets }
-        guard !ordered.isEmpty else { return }
-        let current = ordered.firstIndex { model.isGallerySelection($0) } ?? (offset > 0 ? -1 : ordered.count)
-        let next = ordered[max(0,min(ordered.count-1,current+offset))]
-        model.selectAsset(next.id); scroll.scrollTo(next.id,anchor:.center)
+    private func aspectRatio(_ asset: IndexedAsset) -> CGFloat {
+        guard let w = asset.metadata?.width, let h = asset.metadata?.height, w > 0, h > 0 else { return 1 }
+        let rotated = [5,6,7,8].contains(asset.metadata?.orientation ?? 1)
+        return rotated ? CGFloat(h)/CGFloat(w) : CGFloat(w)/CGFloat(h)
     }
+    private func masonry(_ assets: [IndexedAsset], columns: Int, width: CGFloat) -> [[IndexedAsset]] {
+        var result = Array(repeating:[IndexedAsset](),count:columns), heights = Array(repeating:CGFloat(0),count:columns)
+        for asset in assets {
+            let column = heights.indices.min { heights[$0] < heights[$1] } ?? 0
+            result[column].append(asset); heights[column] += width/aspectRatio(asset)+8
+        }
+        return result
+    }
+    private func photoCell(_ asset: IndexedAsset, height: CGFloat) -> some View {
+        Button { model.selectAsset(asset.id); focused = true } label: {
+            CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0))
+                .frame(maxWidth:.infinity).frame(height:height)
+                .background(Color(nsColor:.controlBackgroundColor))
+                .overlay { if model.isGallerySelection(asset) { Rectangle().strokeBorder(Color.accentColor,lineWidth:2) } }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).id(asset.id)
+        .background(GeometryReader { frame in Color.clear.preference(key:VisiblePhotos.self,value:[asset.id:frame.frame(in:.named("photoScroll")).maxY]) })
+        .accessibilityLabel("\(asset.filename), \(asset.previewState == .failed ? "preview failed" : model.originalAvailable(asset) ? "original available" : "original offline")")
+        .contextMenu {
+            Button("Preview") { model.selectAsset(asset.id); model.previewPresented = true }
+            Button("Find Similar") { model.selectAsset(asset.id); model.findSimilar() }
+            Button("Reveal Original in Finder") { model.selectAsset(asset.id); model.revealPhoto() }
+        }
+        .simultaneousGesture(TapGesture(count:2).onEnded { model.selectAsset(asset.id); model.previewPresented = true })
+    }
+    private func move(dx: Int, dy: Int, columns: Int, width: CGFloat, scroll: ScrollViewProxy) {
+        var positions: [(IndexedAsset,CGFloat,CGFloat)] = [], groupY: CGFloat = 0
+        for group in groups {
+            let layout = masonry(group.assets,columns:columns,width:width)
+            var heights = Array(repeating:CGFloat(0),count:columns)
+            for column in 0..<columns {
+                for asset in layout[column] {
+                    let height = width/aspectRatio(asset)
+                    positions.append((asset,CGFloat(column)*(width+8)+width/2,groupY+heights[column]+height/2))
+                    heights[column] += height+8
+                }
+            }
+            groupY += (heights.max() ?? 0)+40
+        }
+        guard !positions.isEmpty else { return }
+        guard let current = positions.first(where:{ model.isGallerySelection($0.0) }) else {
+            if let first = groups.first?.assets.first { model.selectAsset(first.id); scroll.scrollTo(first.id,anchor:.center) }; return
+        }
+        let candidates = positions.filter { candidate in
+            if dx != 0 { return (candidate.1-current.1)*CGFloat(dx) > 1 }
+            return abs(candidate.1-current.1)<1 && (candidate.2-current.2)*CGFloat(dy)>1
+        }
+        let next = candidates.min { a,b in
+            func distance(_ p: (IndexedAsset,CGFloat,CGFloat)) -> CGFloat { abs(p.1-current.1)+abs(p.2-current.2) }
+            return distance(a)<distance(b)
+        }
+        if let next { model.selectAsset(next.0.id); scroll.scrollTo(next.0.id,anchor:.center) }
+    }
+
 }
 struct PhotoPreview: View {
     @ObservedObject var model: WorkspaceModel

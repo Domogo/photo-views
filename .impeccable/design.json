@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-02T10:18:32.783495+00:00",
+  "generatedAt": "2026-10-02T14:33:48.229815+00:00",
   "title": "Design System: Photo Views",
   "extensions": {
     "nativePlatform": {
@@ -10,6 +10,9 @@
       ],
       "sourceFiles": [
         "Sources/PhotoViewsApp/WorkspaceView.swift",
+        "Sources/PhotoViewsApp/PhotoGrid.swift",
+        "Sources/PhotoViewsApp/FilterChips.swift",
+        "Sources/PhotoViewsApp/WorkspaceModel.swift",
         "Sources/PhotoViewsApp/PhotoViewsApp.swift"
       ],
       "colorSemantics": {
@@ -17,9 +20,10 @@
         "inspector": "NSColor.controlBackgroundColor",
         "primaryText": "system default primary text",
         "secondaryText": "foregroundStyle(.secondary)",
-        "selection": "Native List(selection:) appearance; no custom row backgrounds",
+        "selection": "2pt Color.accentColor photo outline; native List selection",
         "primaryAction": "native borderedProminent button",
-        "separator": "native Divider"
+        "separator": "native Divider",
+        "focus": "1pt Color.accentColor.opacity(0.6) gallery boundary"
       },
       "typographySemantics": {
         "emptyStateTitle": "title2 semibold",
@@ -54,69 +58,91 @@
         "ideal": 260,
         "maximum": 340
       },
-      "adaptation": "Native HSplitView with minimum 360pt central area. ViewThatFits(horizontal) stacks recipe controls as width decreases. Toolbar Sidebar and Inspector actions toggle supporting panes.",
-      "groupPickerWidth": 165,
-      "sortPickerWidth": 185,
+      "adaptation": "Native HSplitView; sidebar initially hidden with persisted visibility, inspector initially hidden and opened by photo selection; toolbar toggles supporting panes.",
       "saveSheetWidth": 400,
       "emptyExplanationMaxWidth": 380,
-      "compactEvidence": "Temporary fixed 780x520pt content frame yielded 780x572pt window including toolbar; normal minimum/default sizing restored after capture."
+      "gallery": {
+        "layout": "Lazy shortest-column masonry",
+        "gutter": 8,
+        "inset": 12,
+        "columnSizingTarget": 208,
+        "aspectRatio": "Orientation-aware recorded dimensions; square fallback; scaledToFit; no captions"
+      },
+      "searchRow": {
+        "horizontalPadding": 12,
+        "verticalPadding": 10,
+        "gap": 8
+      },
+      "filters": {
+        "height": "max(120, min(280, availableHeight - 250)) pt",
+        "scrollable": true
+      }
     },
     "verification": {
-      "milestone": "M1 native catalog shell",
-      "disposition": "ship",
-      "blockingFindings": [],
-      "captures": [
-        ".impeccable/review/m1-source-fixed.png",
-        ".impeccable/review/m1-compact.png",
-        ".impeccable/review/m1-dark.png"
-      ],
-      "renderedReview": "Repaired workspace shows sidebar, recipe controls and inspector. Fixed source and compact captures passed visual review; dark capture visually checked for readability.",
-      "resolvedDefect": "Replaced oversized NavigationSplitView child layout with explicit native HSplitView.",
-      "verifiedInteraction": [
-        "Native sidebar mouse selection",
-        "Native sidebar arrow-key selection"
-      ],
+      "revision": "Quiet photo canvas and overall palette",
+      "disposition": "pending",
+      "sourceCompilation": "passed, reported by implementation agent",
+      "renderedReview": "Pending: GUI locked; no revised UI captures reviewed. Earlier M1/M7 captures are historical and do not verify this revision.",
+      "captures": [],
       "followUpVerification": [
-        "Full Tab focus traversal",
-        "Increased contrast and all supported accent choices",
-        "Reduced motion",
-        "Manual divider/window resizing",
-        "Selected-photo continuity once photo workflows are implemented"
+        "Wide/compact light/dark native gallery",
+        "Expanded filters and active palette",
+        "Selected RAW+JPEG inspector and blocked query",
+        "Keyboard focus/navigation, increased contrast, reduced motion",
+        "Measured palette/retrieval quality and performance"
+      ]
+    },
+    "paletteSearch": {
+      "version": "srgb-hsv-area-v1",
+      "meaning": "Selected family is largest coarse HSV-area family and meets minimum area; no colored-object detection",
+      "defaultMinimumFraction": 0.25,
+      "areaRange": [
+        0.05,
+        1
       ],
-      "scope": "M1 source/settings shell only: indexing, photo grid, retrieval, preview and tag workflows are not implemented."
+      "areaStep": 0.05,
+      "coverage": "Partial preparation is visible; missing/failed data does not silently match"
     }
   },
   "components": [],
   "nativeComponents": [
     {
-      "name": "Workspace navigation",
-      "implementation": "Native HSplitView; List(selection:) with native mouse/arrow selection, source availability, saved views and Collections placeholder; toolbar pane visibility controls"
+      "name": "Search and View",
+      "implementation": "Plain native search field; Filters button; View menu holds search mode, grouping/sorting, saved-view and pairing actions"
     },
     {
-      "name": "View recipe",
-      "implementation": "Disabled plain search field, Filters explanatory popover, labeled grouping and sorting Pickers, edited indicator and save/update actions"
+      "name": "Removable constraints",
+      "implementation": "Small labeled native buttons remove individual exact or palette constraints"
     },
     {
-      "name": "Empty and failure states",
-      "implementation": "SF Symbol, native semibold title, supporting explanation and native actions; no-source, folder-added and catalog-failure states"
+      "name": "Bounded filter drawer",
+      "implementation": "Scrollable exact controls and named palette swatches with minimum-area slider"
     },
     {
-      "name": "Source inspector",
-      "implementation": "ScrollView, LabeledContent, native Divider, source availability/path/actions and recipe summary"
+      "name": "Masonry gallery",
+      "implementation": "Lazy shortest-column placement, full orientation-aware proportions, accent outline, distinct focus boundary, spatial arrows and Space preview"
     },
     {
-      "name": "Saving sheet",
-      "implementation": "Rounded-border name field, definition summary, native Cancel/Save View buttons with keyboard shortcuts and blank-name disabling"
+      "name": "Combined status",
+      "implementation": "Compact result/index disclosure with detailed progress, failures and retry actions"
+    },
+    {
+      "name": "Optional supporting panes",
+      "implementation": "Native sidebar List and inspector ScrollView; initially hidden; selection opens inspector"
+    },
+    {
+      "name": "Saving and collection sheets",
+      "implementation": "Native fields/actions with Cancel/default shortcuts and blank-name disabling"
     }
   ],
   "narrative": {
     "northStar": "Photo Workbench",
-    "overview": "Minimal, bespoke, intuitive native macOS photo workbench. Photographs dominate the intended browsing surface; native controls and precise hierarchy explain operations. M1 is a truthful local catalog shell awaiting indexing. Repaired full-size and compact native captures passed M1 visual review; dark readability was checked. Manual resizing, full Tab traversal, increased contrast and reduced motion retain verification follow-ups.",
+    "overview": "Minimal, bespoke, intuitive native macOS Photo Workbench, refreshed as a quiet photo canvas. A single search row leads a full-proportion masonry gallery; native filters and supporting panes appear when useful. Source compilation passed; revised native rendered and accessibility review remain pending because the GUI is locked.",
     "keyCharacteristics": [
-      "Photograph-led neutral surroundings",
-      "Familiar native interaction",
-      "Stable recipe controls",
-      "Readable availability and saved-definition state"
+      "Photograph-led neutral surroundings and full proportions",
+      "Familiar native interaction with optional panes",
+      "Single search row and on-demand refinement",
+      "Readable constraints, availability, coverage and provenance"
     ],
     "rules": [
       {
@@ -141,18 +167,16 @@
       }
     ],
     "dos": [
-      "Do give photographs the greatest visual area and keep surroundings neutral.",
-      "Do use native macOS controls, focus behavior, SF typography and system appearance.",
-      "Do make constraints and important states readable.",
-      "Do distinguish selection, keyboard focus, availability and provenance.",
-      "Do preserve context through regrouping, source changes and indexing where possible."
+      "Do preserve full photograph proportions and neutral surroundings.",
+      "Do use native macOS controls and system appearance.",
+      "Do expose individual constraints and incomplete coverage.",
+      "Do distinguish focus, selection, availability and provenance."
     ],
     "donts": [
-      "Don't replace labeled core actions with custom gestures or icon-only controls.",
-      "Don't add decorative gradients, glow, color washes or glass over imagery.",
-      "Don't surround every photo or metadata field with a card.",
-      "Don't hide uncertainty, offline availability or incomplete coverage.",
-      "Don't invent exact dynamic color, radius or SF metrics or claim visual sign-off from incomplete captures."
+      "Don't add gallery captions, card framing or decorative overlays.",
+      "Don't equate palette families with object detection.",
+      "Don't invent fixed native color, radius or SF metrics.",
+      "Don't claim revised visual or accessibility signoff from compilation or old captures."
     ]
   }
 }
