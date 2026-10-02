@@ -135,11 +135,17 @@ struct NativePhotoGallery: NSViewRepresentable {
         fileprivate weak var collection: GalleryCollection?
         var observer: NSObjectProtocol?
         private var signature = ""
+        private var previousQuery: ViewRecipe?
+        private var resetScrollPending = false
         private var loadingCount = -1
         private var viewportWidth: CGFloat = 0
         init(model: WorkspaceModel) { self.model = model }
         fileprivate func update(_ model: WorkspaceModel) {
             self.model = model
+            var query = model.recipe
+            query.grouping = .none; query.sorting = .captureNewest
+            if let previousQuery, previousQuery != query { resetScrollPending = true }
+            previousQuery = query
             let groups = ResultGrouping.groups(model.assets,by:model.recipe.grouping,sources:model.sources,ranked:model.isRankedSearch,sorting:model.recipe.sorting)
             let next = groups.map { $0.id+":"+$0.assets.map { $0.id.uuidString+String($0.asset.modifiedAt?.timeIntervalSince1970 ?? 0)+($0.thumbnailPath ?? "") }.joined(separator:"|") }.joined(separator:";")
             if signature != next {
@@ -149,7 +155,12 @@ struct NativePhotoGallery: NSViewRepresentable {
                 let changedGrouping = layout.groups.map(\.id) != groups.map(\.id)
                 layout.groups = groups; signature = next; loadingCount = -1
                 collection?.reloadData(); layout.invalidateLayout(); collection?.layoutSubtreeIfNeeded()
-                if changedGrouping, let id = oldSelected ?? anchor, let path = path(for:id) { collection?.scrollToItems(at:[path],scrollPosition:.top) }
+                if changedGrouping && !resetScrollPending, let id = oldSelected ?? anchor, let path = path(for:id) { collection?.scrollToItems(at:[path],scrollPosition:.top) }
+            }
+            if resetScrollPending && !model.searching, let scroll = collection?.enclosingScrollView {
+                scroll.contentView.scroll(to:.zero)
+                scroll.reflectScrolledClipView(scroll.contentView)
+                resetScrollPending = false
             }
             if let selected = model.selectedGalleryID, let path = path(for:selected) { collection?.selectionIndexPaths = [path] }
             else { collection?.selectionIndexPaths = [] }
