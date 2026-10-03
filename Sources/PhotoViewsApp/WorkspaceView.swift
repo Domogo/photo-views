@@ -154,6 +154,12 @@ struct WorkspaceView: View {
                 }
                 Button { filtersVisible.toggle() } label: { Label("Filters",systemImage:"line.3.horizontal.decrease") }
                     .help("Expand photo filters").accessibilityValue(filtersVisible ? "Expanded" : model.hasFilters || model.recipe.palette != nil ? "Active filters" : "Collapsed")
+                HStack(spacing:4) {
+                    Button { model.zoomGrid(-1) } label: { Image(systemName:"minus.magnifyingglass") }
+                        .disabled(model.gridZoom == 0).help("Smaller photos (⌘−)").accessibilityLabel("Zoom grid out")
+                    Button { model.zoomGrid(1) } label: { Image(systemName:"plus.magnifyingglass") }
+                        .disabled(model.gridZoom == 6).help("Larger photos (⌘+)").accessibilityLabel("Zoom grid in")
+                }
                 viewOptions
                 if model.hasUnsavedChanges { Image(systemName:"circle.fill").font(.system(size:5)).accessibilityLabel("Unsaved view changes").help("Unsaved view changes") }
                 if model.searching { ProgressView().controlSize(.small).accessibilityLabel("Searching photos") }

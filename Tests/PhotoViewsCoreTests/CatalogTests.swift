@@ -13,6 +13,10 @@ final class CatalogTests {
         let clustered = GalleryGeometry.frames(aspects:[1,0.5,0.5,1],width:1180,clusters:[nil,"pair","pair",nil])
         try expectEqual(clustered.frames[1].minY,clustered.frames[2].minY)
         try expectTrue(abs(clustered.frames[1].maxX+8-clustered.frames[2].minX)<0.001)
+        let small = GalleryGeometry.frames(aspects:Array(repeating:1.5,count:20),width:1180,targetWidth:120)
+        let large = GalleryGeometry.frames(aspects:Array(repeating:1.5,count:20),width:1180,targetWidth:380)
+        try expectTrue(large.frames[0].width > small.frames[0].width)
+        try expectTrue(Set(large.frames.map(\.minX)).count < Set(small.frames.map(\.minX)).count)
         let start = Date()
         for width in [780.0,1180.0,1800.0] {
             let result = GalleryGeometry.frames(aspects:aspects,width:width)

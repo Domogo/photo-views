@@ -53,6 +53,7 @@ private final class GalleryCell: NSCollectionViewItem {
 }
 private final class MasonryCollectionLayout: NSCollectionViewLayout {
     var groups: [PhotoResultGroup] = []
+    var targetWidth: Double = 208
     private(set) var items: [IndexPath:NSCollectionViewLayoutAttributes] = [:]
     private var size = NSSize.zero
     override var collectionViewContentSize: NSSize { size }
@@ -66,7 +67,7 @@ private final class MasonryCollectionLayout: NSCollectionViewLayout {
             guard let w = asset.metadata?.width, let h = asset.metadata?.height, w > 0, h > 0 else { return 1 }
             return [5,6,7,8].contains(asset.metadata?.orientation ?? 1) ? Double(h)/Double(w) : Double(w)/Double(h)
         }
-        let result = GalleryGeometry.frames(aspects:aspects,width:width,y:12,clusters:assets.map(\.nearDuplicateGroup))
+        let result = GalleryGeometry.frames(aspects:aspects,width:width,y:12,clusters:assets.map(\.nearDuplicateGroup),targetWidth:targetWidth)
         var offset = 0
         for (section,group) in groups.enumerated() {
             for item in group.assets.indices {
@@ -146,6 +147,12 @@ struct NativePhotoGallery: NSViewRepresentable {
             query.grouping = .none; query.sorting = .captureNewest
             if let previousQuery, previousQuery != query { resetScrollPending = true }
             previousQuery = query
+            if layout.targetWidth != model.gridTargetWidth {
+                let visible = collection?.visibleItems().compactMap { collection?.indexPath(for:$0) }.min { (layout.items[$0]?.frame.minY ?? 0) < (layout.items[$1]?.frame.minY ?? 0) }
+                layout.targetWidth = model.gridTargetWidth
+                layout.invalidateLayout(); collection?.layoutSubtreeIfNeeded()
+                if let visible { collection?.scrollToItems(at:[visible],scrollPosition:.top) }
+            }
             let groups = ResultGrouping.groups(model.assets,by:model.usesVisualVectors && model.recipe.grouping == .folder ? .none : model.recipe.grouping,sources:model.sources,ranked:model.isRankedSearch,sorting:model.recipe.sorting)
             let next = groups.map { $0.id+":"+$0.assets.map { $0.id.uuidString+String($0.asset.modifiedAt?.timeIntervalSince1970 ?? 0)+($0.thumbnailPath ?? "")+($0.nearDuplicateGroup ?? "") }.joined(separator:"|") }.joined(separator:";")
             if signature != next {

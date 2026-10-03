@@ -3,6 +3,12 @@ import Foundation
 import PhotoViewsCore
 
 @MainActor final class WorkspaceModel: ObservableObject {
+    @Published var gridZoom = min(6,max(0,UserDefaults.standard.object(forKey:"gridZoom") as? Int ?? 2)) {
+        didSet { UserDefaults.standard.set(gridZoom,forKey:"gridZoom") }
+    }
+    var gridTargetWidth: Double { [120.0,160,208,280,380,520,720][gridZoom] }
+    func zoomGrid(_ delta: Int) { gridZoom = min(6,max(0,gridZoom+delta)) }
+
     @Published var sources: [CatalogSource] = []
     @Published var collections: [CollectionRecord] = []
     @Published var tagCoverage = TagCoverage(total:0,prepared:0)

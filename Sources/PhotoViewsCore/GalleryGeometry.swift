@@ -2,9 +2,9 @@ import Foundation
 
 public enum GalleryGeometry {
     /// Deterministic shortest-column placement; no view measurement or scroll feedback.
-    public static func frames(aspects: [Double], width: Double, y: Double = 0, clusters: [String?] = []) -> (frames: [CGRect], height: Double) {
+    public static func frames(aspects: [Double], width: Double, y: Double = 0, clusters: [String?] = [], targetWidth: Double = 208) -> (frames: [CGRect], height: Double) {
         let inset = 12.0, gap = 8.0
-        let columns = max(1,Int((max(1,width)-2*inset+gap)/208))
+        let columns = max(1,Int((max(1,width)-2*inset+gap)/max(80,targetWidth.isFinite ? targetWidth : 208)))
         let cellWidth = max(1,(width-2*inset-Double(columns-1)*gap)/Double(columns))
         var heights = Array(repeating:y,count:columns), frames: [CGRect] = []
         var index = 0
