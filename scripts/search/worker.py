@@ -395,6 +395,7 @@ class Worker:
     def handle(self, request):
         if request.get('protocol') != PROTOCOL: raise ValueError('Unsupported worker protocol')
         op=request.get('op')
+        if op=='people-refine':return self.people.refine()
         if op=='people':return self.people.summary()
         if op=='people-index':return self.people.index(request.get('limit',4),request.get('retry',False))
         if op=='people-correct':return self.people.correct(request)

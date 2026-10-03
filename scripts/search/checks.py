@@ -34,6 +34,46 @@ class SearchChecks(unittest.TestCase):
     def tearDown(self):self.worker.db.close();self.tmp.cleanup()
     def query(self,recipe,mode='filename'):
         return self.worker.handle({'protocol':1,'op':'query','recipe':recipe,'mode':mode,'limit':1})
+    def test_people_refinement_blocks_cooccurrence_and_exclusions(self):
+        db=self.worker.db;v=np.zeros(128,dtype='<f4');v[0]=1
+        with db:
+            for person,assets in [('p',['a','b']),('q',['c','d']),('r',['a','c']),('s',['b','d'])]:
+                db.execute('INSERT INTO people VALUES(?,?)',[person,v.tobytes()])
+                for asset in assets:db.execute('INSERT INTO faces VALUES(?,?,?,?,?,?,?)',[person+asset,asset,person,v.tobytes(),'avatar.jpg',40,0])
+            db.execute('INSERT INTO person_exclusions VALUES(?,?)',['a','s'])
+        result=self.worker.people.refine()
+        self.assertEqual(result['merged'],1)
+        self.assertEqual(self.worker.people.canonical('q'),'p')
+        self.assertEqual(self.worker.people.canonical('r'),'r')
+        self.assertEqual(self.worker.people.canonical('s'),'s')
+        self.assertEqual(self.worker.people.refine()['merged'],0)
+
+    def test_people_refinement_does_not_count_raw_jpeg_as_independent_support(self):
+        db=self.worker.db
+        with db:
+            for person,assets,angle in [('p',['a','b'],0),('q',['c','d'],30)]:
+                v=np.zeros(128,dtype='<f4');v[0]=np.cos(np.deg2rad(angle));v[1]=np.sin(np.deg2rad(angle))
+                db.execute('INSERT INTO people VALUES(?,?)',[person,v.tobytes()])
+                for asset in assets:
+                    db.execute('INSERT INTO faces VALUES(?,?,?,?,?,?,?)',[person+asset,asset,person,v.tobytes(),'avatar.jpg',40,0])
+                    db.execute('INSERT INTO photo_assets VALUES(?,?)',[person,asset])
+            # One logical photo per person needs the stricter singleton threshold.
+            db.execute('UPDATE faces SET vector=? WHERE person_id=?',[np.array([.8,.6]+[0]*126,dtype='<f4').tobytes(),'q'])
+        self.assertEqual(self.worker.people.refine()['merged'],0)
+
+    def test_people_refinement_prevents_transitive_chaining(self):
+        db=self.worker.db
+        with db:
+            for index,angle in enumerate([0,30,60]):
+                person=str(index);v=np.zeros(128,dtype='<f4');v[0]=np.cos(np.deg2rad(angle));v[1]=np.sin(np.deg2rad(angle))
+                db.execute('INSERT INTO people VALUES(?,?)',[person,v.tobytes()])
+                for j in range(2):
+                    asset=person+str(j)
+                    db.execute('INSERT INTO assets(id) VALUES(?)',[asset])
+                    db.execute('INSERT INTO faces VALUES(?,?,?,?,?,?,?)',[asset,asset,person,v.tobytes(),'avatar.jpg',40,0])
+        self.assertEqual(self.worker.people.refine()['merged'],1)
+        self.assertNotEqual(self.worker.people.canonical('0'),self.worker.people.canonical('2'))
+
     def test_people_filter_corrections_and_merge_persist(self):
         db=self.worker.db
         vector=np.ones(128,dtype='<f4').tobytes()

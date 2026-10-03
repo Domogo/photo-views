@@ -77,6 +77,7 @@ class People:
         folder=self.folder/'avatars';folder.mkdir(parents=True,exist_ok=True)
         previous=[(self.canonical(r['person_id']),self.np.frombuffer(r['vector'],dtype='<f4')) for r in self.db.execute('SELECT person_id,vector FROM faces WHERE asset_id=? AND person_id IS NOT NULL',[row['id']])]
         excluded={self.canonical(r[0]) for r in self.db.execute('SELECT person_id FROM person_exclusions WHERE asset_id=?',[row['id']])}
+        profiles=self.profiles()
         # Replace this asset atomically, including the zero-face case.
         with self.db:
             self.db.execute('DELETE FROM faces WHERE asset_id=?',[row['id']])
@@ -89,11 +90,15 @@ class People:
                 vector/=norm
                 face_id=str(uuid.uuid5(uuid.NAMESPACE_URL,VERSION+row['id']+str(index))).upper()
                 choices=[]
-                for person in self.db.execute('SELECT id,vector FROM people'):
-                    canonical=self.canonical(person['id'])
-                    if canonical in occupied:continue
-                    score=float(vector @ np.frombuffer(person['vector'],dtype='<f4'))
-                    if score>=THRESHOLD:choices.append((score,canonical))
+                for person,(center,samples,_,_) in profiles.items():
+                    if person in occupied:continue
+                    score=float(vector @ center)
+                    support=samples @ vector
+                    if score>=THRESHOLD and float(support.max())>=THRESHOLD:
+                        choices.append((score,person))
+                choices.sort(reverse=True)
+                # Ambiguous matches remain separate rather than merging lookalikes.
+                if len(choices)>1 and choices[0][0]-choices[1][0]<.04:choices=[]
                 # Preserve prior face membership by descriptor, never by detection ordinal.
                 prior=[(float(vector @ prior_vector),person) for person,prior_vector in previous if person not in occupied]
                 if prior and max(prior)[0]>=THRESHOLD:person_id=max(prior)[1]
@@ -108,7 +113,7 @@ class People:
                 self.db.execute('INSERT INTO faces VALUES(?,?,?,?,?,?,?)',[face_id,row['id'],person_id,vector.tobytes(),str(avatar),float(min(fw,fh)*face[-1]),int(person_id in excluded)])
             self.db.execute('INSERT OR REPLACE INTO face_scans VALUES(?,?,NULL)',[row['id'],stamp])
 
-    def correct(self, request):
+    def correct(self, request, summarize=True):
         person=self.canonical(request.get('personID'));action=request.get('action')
         if not self.db.execute('SELECT 1 FROM people WHERE id=?',[person]).fetchone():raise ValueError('This person is no longer available. Refresh People.')
         with self.db:
@@ -129,4 +134,42 @@ class People:
                 self.db.execute('DELETE FROM person_exclusions WHERE person_id=?',[person])
                 self.db.execute('UPDATE faces SET rejected=0 WHERE person_id=?',[person])
             else:raise ValueError('Unknown people correction')
-        return self.summary()
+        return self.summary() if summarize else None
+
+    def profiles(self):
+        import numpy as np
+        groups={}
+        for row in self.db.execute('SELECT person_id,asset_id,vector FROM faces WHERE rejected=0 AND person_id IS NOT NULL ORDER BY quality DESC'):
+            groups.setdefault(row['person_id'],[]).append((row['asset_id'],np.frombuffer(row['vector'],dtype='<f4')))
+        profiles={}
+        for person,rows in groups.items():
+            matrix=np.stack([v for _,v in rows]);center=matrix.mean(axis=0);norm=np.linalg.norm(center)
+            if norm>0:profiles[person]=(center/norm,matrix,{asset for asset,_ in rows},rows)
+        return profiles
+
+    def refine(self):
+        """Conservative complete-link consolidation, blocking co-occurring identities."""
+        import numpy as np
+        profiles=self.profiles();ids=sorted(profiles,key=lambda id:(-len(profiles[id][2]),id))
+        logical={r[0]:r[1] for r in self.db.execute('SELECT asset_id,photo_id FROM photo_assets')}
+        clusters=[]
+        def compatible(a,b):
+            ca,ma,aa,ra=profiles[a];cb,mb,ab,rb=profiles[b]
+            if aa & ab:return False
+            if self.db.execute('SELECT 1 FROM person_exclusions WHERE person_id IN (?,?) LIMIT 1',[a,b]).fetchone():return False
+            similarity=float(ca @ cb)
+            if min(len({logical.get(a,a) for a in aa}),len({logical.get(b,b) for b in ab}))<2:return similarity>=.85
+            if similarity<.65:return False
+            scores=ma @ mb.T
+            left={logical.get(asset,asset) for (asset,_),score in zip(ra,scores.max(axis=1)) if score>=.60}
+            right={logical.get(asset,asset) for (asset,_),score in zip(rb,scores.max(axis=0)) if score>=.60}
+            return len(left)>=2 and len(right)>=2
+        for person in ids:
+            for cluster in clusters:
+                if all(compatible(person,member) for member in cluster):cluster.append(person);break
+            else:clusters.append([person])
+        merged=0
+        for cluster in clusters:
+            for person in cluster[1:]:
+                self.correct({'action':'merge','personID':person,'targetID':cluster[0]},summarize=False);merged+=1
+        result=self.summary();result['merged']=merged;return result

@@ -10,6 +10,10 @@ extension WorkspaceModel {
         browsingPeople = false; selectedSavedView = nil; recipe = ViewRecipe(); recipe.personID = person.id
         selectedAssetID = nil; persistRecipe()
     }
+    func refinePeople() {
+        pausePeople()
+        requestPeople(["op":"people-refine"]) { _ in }
+    }
     func refreshPeople() {
         requestPeople(["op":"people"]) { [weak self] progress in
             if let self, !self.didStartPeople && progress.remaining > 0 { self.didStartPeople = true; self.indexPeople() }
@@ -67,6 +71,7 @@ struct PeopleBrowser: View {
                     ProgressView().controlSize(.small)
                     Button("Pause") { model.pausePeople() }
                 } else {
+                    if model.people.count > 1 { Button("Refine Groups") { model.refinePeople() }.help("Combine strongly matching groups using all detected faces") }
                     Button(model.people.isEmpty ? "Find People" : "Scan New Photos") { model.indexPeople() }
                     if (model.peopleProgress?.failed ?? 0) > 0 { Button("Retry Failed") { model.indexPeople(retry:true) } }
                 }
