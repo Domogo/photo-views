@@ -9,6 +9,14 @@ import PhotoViewsCore
     var gridTargetWidth: Double { [120.0,160,208,280,380,520,720][gridZoom] }
     func zoomGrid(_ delta: Int) { gridZoom = min(6,max(0,gridZoom+delta)) }
 
+    var didStartPeople = false
+    var peopleGeneration = 0
+    @Published var browsingPeople = false
+    @Published var people: [PersonGroup] = []
+    @Published var peopleIndexing = false
+    @Published var peopleProgress: PeopleProgress?
+    @Published var peopleError: String?
+    lazy var peopleBridge = SearchBridge(catalogURL:catalogURL)
     @Published var sources: [CatalogSource] = []
     @Published var collections: [CollectionRecord] = []
     @Published var tagCoverage = TagCoverage(total:0,prepared:0)
@@ -96,6 +104,8 @@ import PhotoViewsCore
         sources.first { recipe.sourceIDs.contains($0.id) }
     }
     var currentTitle: String {
+        if browsingPeople { return "People" }
+        if recipe.personID != nil { return "Person" }
         if let saved = savedViews.first(where:{$0.id == selectedSavedView}) { return saved.name }
         if let collection = collections.first(where:{ $0.id == recipe.collectionID }) { return collection.name }
         if recipe.favoritesOnly == true { return "Favorites" }
@@ -130,12 +140,12 @@ import PhotoViewsCore
             refreshAssets()
         } catch { errorMessage = error.localizedDescription }
     }
-    func selectAll() { selectedSavedView = nil; recipe.collectionID = nil; recipe.favoritesOnly = nil; recipe.sourceIDs = []; persistRecipe() }
-    func selectSource(_ source: CatalogSource) { selectedSavedView = nil; recipe.collectionID = nil; recipe.favoritesOnly = nil; recipe.sourceIDs = [source.id]; persistRecipe() }
-    func selectView(_ view: SavedView) { selectedSavedView = view.id; assetLimit = 500; recipe = view.recipe; persistRecipe(); refreshAssets() }
+    func selectAll() { browsingPeople = false; recipe.personID = nil; selectedSavedView = nil; recipe.collectionID = nil; recipe.favoritesOnly = nil; recipe.sourceIDs = []; persistRecipe() }
+    func selectSource(_ source: CatalogSource) { browsingPeople = false; recipe.personID = nil; selectedSavedView = nil; recipe.collectionID = nil; recipe.favoritesOnly = nil; recipe.sourceIDs = [source.id]; persistRecipe() }
+    func selectView(_ view: SavedView) { browsingPeople = false; selectedSavedView = view.id; assetLimit = 500; recipe = view.recipe; persistRecipe(); refreshAssets() }
 
-    func selectFavorites() { selectedSavedView = nil; recipe = ViewRecipe(); recipe.favoritesOnly = true; persistRecipe() }
-    func selectCollection(_ collection: CollectionRecord) { selectedSavedView = nil; recipe = ViewRecipe(); recipe.collectionID = collection.id; persistRecipe() }
+    func selectFavorites() { browsingPeople = false; selectedSavedView = nil; recipe = ViewRecipe(); recipe.favoritesOnly = true; persistRecipe() }
+    func selectCollection(_ collection: CollectionRecord) { browsingPeople = false; selectedSavedView = nil; recipe = ViewRecipe(); recipe.collectionID = collection.id; persistRecipe() }
     @discardableResult func createCollection(name: String) -> Bool {
         guard let catalog else { return false }
         do { let collection = try catalog.createCollection(name:name); collections = try catalog.collections(); selectCollection(collection); return true }

@@ -28,9 +28,15 @@ struct WorkspaceView: View {
                 sidebar.frame(minWidth:180,idealWidth:220,maxWidth:300)
             }
             VStack(spacing:0) {
-                recipeBar.fixedSize(horizontal:false,vertical:true)
-                Divider()
-                indexingBar
+                if !model.browsingPeople {
+                    if model.recipe.personID != nil {
+                        HStack { Button("People") { model.selectPeople() }; Spacer(); Button("Restore Excluded Photos") { model.restorePersonMatches() } }.padding(.horizontal,12).padding(.top,8)
+                    }
+                    if model.recipe.personID != nil, let error = model.peopleError { Text(error).font(.caption).foregroundStyle(.secondary).padding(.horizontal,12) }
+                    recipeBar.fixedSize(horizontal:false,vertical:true)
+                    Divider()
+                    indexingBar
+                }
                 content.frame(maxWidth:.infinity,maxHeight:.infinity)
             }
             .frame(minWidth:360,maxWidth:.infinity,maxHeight:.infinity)
@@ -71,6 +77,7 @@ struct WorkspaceView: View {
     }
     private var sidebarSelection: Binding<String?> {
         Binding(get: {
+            if model.browsingPeople || model.recipe.personID != nil { return "people" }
             if let id = model.selectedSavedView { return "view:\(id.uuidString)" }
             if let id = model.recipe.collectionID { return "collection:\(id.uuidString)" }
             if model.recipe.favoritesOnly == true { return "favorites" }
@@ -78,7 +85,8 @@ struct WorkspaceView: View {
             return "all"
         }, set: { value in
             guard let value else { return }
-            if value == "all" { model.selectAll() }
+            if value == "people" { model.selectPeople() }
+            else if value == "all" { model.selectAll() }
             else if value == "favorites" { model.selectFavorites() }
             else if value == "newCollection" { collectionName = ""; creatingCollection = true }
             else if let collection = model.collections.first(where:{ "collection:\($0.id.uuidString)" == value }) { model.selectCollection(collection) }
@@ -90,6 +98,7 @@ struct WorkspaceView: View {
         List(selection: sidebarSelection) {
             Label("All photos",systemImage:"photo.on.rectangle").tag("all")
             Label("Favorites",systemImage:"heart").tag("favorites")
+            Label("People",systemImage:"person.2").tag("people")
             Section("Sources") {
                 if model.sources.isEmpty { Text("No folders added").foregroundStyle(.secondary) }
                 ForEach(model.sources) { source in
@@ -352,6 +361,8 @@ struct WorkspaceView: View {
                 Button("Add Folder…") { model.chooseFolder() }.buttonStyle(.borderedProminent)
                     .keyboardShortcut("o",modifiers:[.command])
             }
+        } else if model.browsingPeople {
+            PeopleBrowser(model:model)
         } else if let error = model.searchError {
             emptyState(icon:"exclamationmark.triangle",title:"Search needs attention",detail:error) {
                 Button("Try Again") { model.refreshAssets() }
@@ -360,6 +371,10 @@ struct WorkspaceView: View {
             emptyState(icon:"magnifyingglass",title:plan.canApply ? "Ready to search" : "Search needs correction",detail:plan.canApply ? "Press Return or Search to apply the recognized constraints." : "Edit the unsupported or ambiguous clauses above. This search has not run.") { EmptyView() }
         } else if model.assets.isEmpty && model.searching {
             emptyState(icon:"magnifyingglass",title:"Loading photos…",detail:"Preparing your local results.") { ProgressView().controlSize(.small) }
+        } else if model.assets.isEmpty && model.recipe.personID != nil {
+            emptyState(icon:"person.crop.circle",title:"No matching photos",detail:"No detected matches remain for this person and the current search. You can edit the search or restore excluded photos above.") {
+                Button("Browse People") { model.selectPeople() }
+            }
         } else if model.assets.isEmpty && (model.recipe.collectionID != nil || model.recipe.favoritesOnly == true) && !model.hasSearch && !model.hasFilters {
             emptyState(icon:model.recipe.favoritesOnly == true ? "heart" : "square.stack",title:model.recipe.favoritesOnly == true ? "No favorites yet" : "This collection is empty",detail:"Select a photo in All photos and add it using the details sidebar. Manual collections keep only the photos you choose.") {
                 Button("Browse All Photos") { model.selectAll() }

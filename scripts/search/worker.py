@@ -38,6 +38,8 @@ def constraints(recipe):
     sources = recipe.get('sourceIDs', [])
     if sources:
         clauses.append('a.source_id IN (' + ','.join('?' for _ in sources) + ')'); values.extend(sources)
+    if recipe.get('personID'):
+        clauses.append('EXISTS(SELECT 1 FROM faces f WHERE f.asset_id=a.id AND f.person_id=? AND f.rejected=0)');values.append(recipe['personID'])
     if recipe.get('favoritesOnly'): clauses.append('a.favorite=1')
     if recipe.get('collectionID'):
         clauses.append('EXISTS(SELECT 1 FROM collection_assets ca WHERE ca.asset_id=a.id AND ca.collection_id=?)');values.append(recipe['collectionID'])
@@ -88,6 +90,8 @@ class Worker:
         self.tag_config=json.loads(config_path.read_text())
         self.tag_version=self.tag_config['version']+':'+hashlib.sha256(config_path.read_bytes()).hexdigest()[:12]
         self.tag_vectors=None
+        from people import People
+        self.people = People(self.db,self.model_dir)
 
     @staticmethod
     def palette_fingerprint(row):
@@ -170,6 +174,7 @@ class Worker:
         self.model = model.to(self.device).eval(); self.torch = torch; self.np = np
 
     def coverage(self, recipe):
+        if recipe.get('personID'):recipe=dict(recipe,personID=self.people.canonical(recipe['personID']))
         clauses, args = constraints(recipe)
         where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
         row = self.db.execute('SELECT count(*),sum(CASE WHEN e.asset_id IS NOT NULL THEN 1 ELSE 0 END) FROM assets a LEFT JOIN metadata m ON m.asset_id=a.id LEFT JOIN embeddings e ON e.asset_id=a.id AND e.model_version=?'+where,[self.version]+args).fetchone()
@@ -241,6 +246,7 @@ class Worker:
         self.load_model()
         # Never regenerate an unchanged completed vector; skip individual recorded failures until retry.
         recipe = {'sourceIDs':request.get('sourceIDs',[])}
+        if recipe.get('personID'):recipe=dict(recipe,personID=self.people.canonical(recipe['personID']))
         clauses, args = constraints(recipe)
         clauses += ["j.state='complete'", 'e.asset_id IS NULL', "COALESCE(ij.state,'pending')!='failed'", '(d.analysis_path IS NOT NULL OR d.thumbnail_path IS NOT NULL)']
         rows = self.db.execute("""SELECT a.id,a.source_id,a.modified_at,a.byte_size,d.analysis_path,d.thumbnail_path,d.pipeline_version
@@ -278,6 +284,7 @@ class Worker:
 
     def query(self, request):
         recipe = request.get('recipe', {})
+        if recipe.get('personID'):recipe=dict(recipe,personID=self.people.canonical(recipe['personID']))
         clauses, args = constraints(recipe)
         clauses.append("j.state IN ('complete','failed')")
         rows = self.db.execute("""SELECT a.id,a.source_id,a.relative_path,a.file_id,a.byte_size,a.modified_at,a.available,a.favorite,
@@ -388,6 +395,9 @@ class Worker:
     def handle(self, request):
         if request.get('protocol') != PROTOCOL: raise ValueError('Unsupported worker protocol')
         op=request.get('op')
+        if op=='people':return self.people.summary()
+        if op=='people-index':return self.people.index(request.get('limit',4),request.get('retry',False))
+        if op=='people-correct':return self.people.correct(request)
         if op=='query': return self.query(request)
         if op=='index':
             result=self.index_batch(request); self.palette_batch(32); return result

@@ -72,3 +72,5 @@ Preserve keyboard navigation and selection where possible, as required by the PR
 ## Open Decisions
 
 Hackathon timing/team; camera models and RAW variants/fixtures; demo hardware and collection size; minimum macOS; exact model/tokenizer/backend/license review; optional hosted-call policy/budget; required languages (English evaluation is the PRD's starting proposal); face scope; and distribution target.
+
+People extension (2026-10-03): the user requested anonymous identity browsing. A sidebar People destination displays cropped face avatars; selecting one opens all currently detected matches in the existing photo grid. Local YuNet/SFace indexing runs on cached previews, with progressive coverage, pause/resume, merge and per-photo exclusion/restore. No identity names are inferred. Detection and clustering are provisional and may miss faces or confuse/split people. Naming and identity-aware natural-language clauses are not shipped.

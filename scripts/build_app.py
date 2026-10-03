@@ -20,6 +20,7 @@ contents = app / 'Contents'
 shutil.copy2(binary_dir / 'PhotoViews',contents / 'MacOS' / 'PhotoViews')
 (contents / 'Resources').mkdir(exist_ok=True)
 shutil.copy2(root / 'scripts/search/worker.py',contents / 'Resources/search_worker.py')
+shutil.copy2(root / 'scripts/search/people.py',contents / 'Resources/people.py')
 shutil.copy2(root / 'scripts/search/palette.py',contents / 'Resources/palette.py')
 shutil.copy2(root / 'scripts/search/tag_vocabulary.json',contents / 'Resources/tag_vocabulary.json')
 info = {'CFBundleName':'Photo Views','CFBundleDisplayName':'Photo Views',

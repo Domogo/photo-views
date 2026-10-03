@@ -10,10 +10,11 @@ import PhotoViewsCore
 struct CachedPhoto: View {
     let path: String?
     let revision: String
+    var fill = false
     @State private var image: NSImage?
     var body: some View {
         Group {
-            if let image { Image(nsImage:image).resizable().scaledToFit() }
+            if let image { Image(nsImage:image).resizable().aspectRatio(contentMode:fill ? .fill : .fit) }
             else { Image(systemName:"photo").font(.title2).foregroundStyle(.secondary).frame(maxWidth:.infinity,maxHeight:.infinity) }
         }
         .task(id:(path ?? "")+revision) {

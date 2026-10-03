@@ -1,6 +1,8 @@
 import Foundation
 import PhotoViewsCore
 
+struct PersonGroup: Decodable, Identifiable { var id: UUID; var avatarPath: String; var count: Int }
+struct PeopleProgress: Decodable { var people: [PersonGroup]; var total: Int; var prepared: Int; var failed: Int; var processed: Int; var remaining: Int }
 struct SearchFailure: Decodable { var assetID: UUID; var filename: String; var error: String }
 struct SearchCoverage: Decodable { var total: Int; var embedded: Int; var failed: Int; var failures: [SearchFailure]? = nil }
 struct TagCoverage: Decodable { var total: Int; var prepared: Int }

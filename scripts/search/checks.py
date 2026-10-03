@@ -34,6 +34,56 @@ class SearchChecks(unittest.TestCase):
     def tearDown(self):self.worker.db.close();self.tmp.cleanup()
     def query(self,recipe,mode='filename'):
         return self.worker.handle({'protocol':1,'op':'query','recipe':recipe,'mode':mode,'limit':1})
+    def test_people_filter_corrections_and_merge_persist(self):
+        db=self.worker.db
+        vector=np.ones(128,dtype='<f4').tobytes()
+        with db:
+            db.execute('INSERT INTO people VALUES(?,?)',['p',vector])
+            db.execute('INSERT INTO people VALUES(?,?)',['q',vector])
+            db.execute('INSERT INTO faces VALUES(?,?,?,?,?,?,?)',['fa','a','p',vector,'a.jpg',1,0])
+            db.execute('INSERT INTO faces VALUES(?,?,?,?,?,?,?)',['fb','b','p',vector,'b.jpg',1,0])
+            db.execute('INSERT INTO faces VALUES(?,?,?,?,?,?,?)',['fc','c','q',vector,'c.jpg',1,0])
+        self.assertEqual(self.query({'personID':'p'})['resultCount'],2)
+        self.assertEqual(self.query({'personID':'p','sourceIDs':['two']})['resultCount'],0)
+        self.worker.people.correct({'action':'remove','personID':'p','assetID':'a'})
+        self.assertEqual(self.query({'personID':'p'})['resultCount'],1)
+        self.worker.db.close();self.worker=Worker(self.path,Path(self.tmp.name))
+        self.assertEqual(self.query({'personID':'p'})['resultCount'],1)
+        self.worker.people.correct({'action':'restore','personID':'p'})
+        self.worker.people.correct({'action':'merge','personID':'q','targetID':'p'})
+        self.assertEqual(self.query({'personID':'p'})['resultCount'],3)
+        self.assertEqual(self.query({'personID':'q'})['resultCount'],3)
+        self.worker.db.close();self.worker=Worker(self.path,Path(self.tmp.name))
+        self.assertEqual(self.query({'personID':'q'})['resultCount'],3)
+        with self.assertRaises(ValueError):self.worker.people.correct({'action':'merge','personID':'p','targetID':'p'})
+
+    def test_people_exclusion_survives_changed_face_order_and_restore(self):
+        people=self.worker.people;db=self.worker.db
+        vector=np.zeros(128,dtype='<f4');vector[0]=1
+        other=np.zeros(128,dtype='<f4');other[1]=1
+        with db:
+            db.execute('INSERT INTO people VALUES(?,?)',['p',vector.tobytes()])
+            db.execute('INSERT INTO faces VALUES(?,?,?,?,?,?,?)',['prior','a','p',vector.tobytes(),'old.jpg',40,0])
+        people.correct({'action':'remove','personID':'p','assetID':'a'})
+        class CV:
+            @staticmethod
+            def imread(path):return np.ones((160,160,3),dtype=np.uint8)
+            @staticmethod
+            def imwrite(path,image):return True
+        class Detector:
+            def setInputSize(self,size):pass
+            def detect(self,image):return None,np.array([[0,10,40,40,1,0,0,0,0,0,0,0,0,0,.99],[80,10,40,40,0,0,0,0,0,0,0,0,0,0,.99]])
+        class Recognizer:
+            def alignCrop(self,image,face):return int(face[4])
+            def feature(self,marker):return [vector,other][marker].copy()
+        people.cv=CV();people.np=np;people.detector=Detector();people.recognizer=Recognizer();people.folder=Path(self.tmp.name)/'people'
+        row=db.execute('SELECT a.id,d.thumbnail_path,d.analysis_path FROM assets a JOIN derivatives d ON d.asset_id=a.id WHERE a.id=?',['a']).fetchone()
+        people.scan(row,'changed')
+        self.assertEqual(db.execute('SELECT rejected FROM faces WHERE person_id=?',['p']).fetchone()[0],1)
+        self.assertEqual(self.query({'personID':'p'})['resultCount'],0)
+        people.correct({'action':'restore','personID':'p'})
+        self.assertEqual(self.query({'personID':'p'})['resultCount'],1)
+
     def test_pair_collapse_respects_asset_constraints_and_selection(self):
         db=sqlite3.connect(self.path)
         db.execute("INSERT INTO photos VALUES('p','b')")

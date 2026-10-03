@@ -204,6 +204,10 @@ struct NativePhotoGallery: NSViewRepresentable {
             for (title,action) in [("Preview",#selector(openPreview)),("Find Similar",#selector(findSimilar)),("Reveal Original in Finder",#selector(reveal))] {
                 let item = NSMenuItem(title:title,action:action,keyEquivalent:""); item.target = self; menu.addItem(item)
             }
+            if model.recipe.personID != nil {
+                let item = NSMenuItem(title:"Not This Person",action:#selector(removePersonMatch),keyEquivalent:"")
+                item.target = self; menu.addItem(item)
+            }
             let editors = installedPhotoEditors()
             if !editors.isEmpty { menu.addItem(.separator()) }
             for (name,url) in editors {
@@ -232,6 +236,7 @@ struct NativePhotoGallery: NSViewRepresentable {
             }
             return found.sorted { $0.key < $1.key }.map { ($0.key,$0.value) }
         }
+        @objc private func removePersonMatch() { if let asset = model.selectedAsset { model.removeFromPerson(asset) } }
         @objc private func openEditor(_ sender: NSMenuItem) {
             guard let application = sender.representedObject as? URL else { return }
             model.openOriginal(in:application)

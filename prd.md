@@ -54,7 +54,7 @@ Compare the same representative collection and queries in two or three competito
 | Organization | Manual collections, favorites and tag editing | Required, minimal implementation |
 | Offline catalog | Cached thumbnails, metadata and search remain available while a drive is disconnected | Required |
 | Faces | Detect face presence/count for filtering if schedule allows | Stretch within MVP |
-| Person identities | Cluster faces, name people and merge/split clusters | Follow-up |
+| Person identities | Anonymous avatar groups and merge/exclude corrections implemented as a user-requested extension; naming and comprehensive split/recluster remain follow-up | Extension |
 
 JPEG, PNG, HEIC and validated camera RAW formats are in the MVP. Video, OCR, map browsing, cloud sync, physical file organization, bulk metadata writing and photo editing are excluded.
 
