@@ -11,6 +11,28 @@ MODEL_VERSION = 'openclip-vit-b32-' + REVISION + ':imageio-m2-v1:search-v1'
 RANKING_VERSION = 'rrf-k60-v1'
 
 
+def near_duplicate_order(ranked, vectors, hashes, np, threshold=0.92):
+    """Anchor-based clusters: no transitive chaining; preserve strongest match order."""
+    usable = [id for id in ranked if id in vectors]
+    if not usable: return ranked, {}
+    matrix = np.stack([vectors[id] for id in usable])
+    positions = {id:i for i,id in enumerate(usable)}
+    seen, ordered, groups = set(), [], {}
+    for anchor in ranked:
+        if anchor in seen: continue
+        members = [anchor]
+        if anchor in positions:
+            similarities = matrix @ vectors[anchor]
+            candidates = [id for id in usable if id not in seen and id != anchor and float(similarities[positions[id]]) >= threshold]
+            if candidates:
+                fingerprint = hashes(anchor)
+                if fingerprint is not None:
+                    members += [id for id in candidates if (value := hashes(id)) is not None and (fingerprint ^ value).bit_count() <= 20]
+        for id in members:
+            seen.add(id); ordered.append(id)
+            if len(members)>1: groups[id] = anchor
+    return ordered, groups
+
 def constraints(recipe):
     clauses, values = [], []
     sources = recipe.get('sourceIDs', [])
@@ -70,6 +92,30 @@ class Worker:
     @staticmethod
     def palette_fingerprint(row):
         return json.dumps([row['modified_at'],row['byte_size'],row['pipeline_version']],separators=(',',':'))
+
+    def preview_hash(self, row):
+        path = row['thumbnail_path'] or row['analysis_path']
+        if not path: return None
+        try:
+            stat = Path(path).stat(); key = (path,stat.st_mtime_ns,stat.st_size)
+            cache = getattr(self,'_near_hashes',None)
+            if cache is None: cache = self._near_hashes = {}
+            if key in cache: return cache[key]
+            from PIL import Image, ImageStat
+            with Image.open(path) as image:
+                gray = image.convert('L')
+                if ImageStat.Stat(gray).stddev[0] < 5:
+                    if len(cache)>=8192: cache.clear()
+                    cache[key] = None
+                    return None
+                pixels = gray.resize((9,8)).tobytes()
+            value = 0
+            for y in range(8):
+                for x in range(8): value = (value << 1) | int(pixels[y*9+x] > pixels[y*9+x+1])
+            if len(cache)>=8192: cache.clear()
+            cache[key] = value
+            return value
+        except (OSError,ValueError): return None
 
     def palette_batch(self, limit=32, retry=False):
         if retry:
@@ -313,15 +359,21 @@ class Worker:
                 key = associations.get(id,id)
                 if key not in seen: seen.add(key); collapsed.append(id)
             ranked = collapsed
+        near_groups = {}
+        if reference or (text and mode != 'filename'):
+            vector_map = {id:vector for id,vector in zip(candidates,vectors)}
+            ranked, near_groups = near_duplicate_order(ranked,vector_map,lambda id:self.preview_hash(by_id[id]),self.np)
         total = len(ranked)
         limit = min(100000,max(1,request.get('limit',500)))
         eligible = set(ranked)
+        while limit < total and near_groups.get(ranked[limit-1]) is not None and near_groups.get(ranked[limit]) == near_groups[ranked[limit-1]]:
+            limit += 1
         ranked = ranked[:limit]
         eligible_members = {id for id in matching if id in eligible or (collapse and associations.get(id) in {associations.get(r) for r in eligible if r in associations})}
         subjects=self.subjects(eligible_members)
         def asset_payload(id):
             row=by_id[id]; metadata=json.loads(row['payload']) if row['payload'] else None
-            return {'photoID':associations.get(id),'pairedAssetIDs':[r[0] for r in self.db.execute('SELECT asset_id FROM photo_assets WHERE photo_id=? ORDER BY asset_id',[associations[id]])] if id in associations else None,'favorite':bool(row['favorite']),'primarySubject':subjects[id][1] if id in subjects else None,'primarySubjectSuggested':subjects[id][2] if id in subjects else False,'asset':{'id':id,'sourceID':row['source_id'],'relativePath':row['relative_path'],'fileID':row['file_id'],'byteSize':row['byte_size'],'modifiedAt':row['modified_at']-978307200 if row['modified_at'] is not None else None},'available':bool(row['available']), 'metadata':metadata,'thumbnailPath':row['thumbnail_path'],'analysisPath':row['analysis_path'],'pipelineVersion':row['pipeline_version'],'previewSource':row['preview_source'],'previewState':row['state'],'error':row['error']}
+            return {'nearDuplicateGroup':near_groups.get(id),'photoID':associations.get(id),'pairedAssetIDs':[r[0] for r in self.db.execute('SELECT asset_id FROM photo_assets WHERE photo_id=? ORDER BY asset_id',[associations[id]])] if id in associations else None,'favorite':bool(row['favorite']),'primarySubject':subjects[id][1] if id in subjects else None,'primarySubjectSuggested':subjects[id][2] if id in subjects else False,'asset':{'id':id,'sourceID':row['source_id'],'relativePath':row['relative_path'],'fileID':row['file_id'],'byteSize':row['byte_size'],'modifiedAt':row['modified_at']-978307200 if row['modified_at'] is not None else None},'available':bool(row['available']), 'metadata':metadata,'thumbnailPath':row['thumbnail_path'],'analysisPath':row['analysis_path'],'pipelineVersion':row['pipeline_version'],'previewSource':row['preview_source'],'previewState':row['state'],'error':row['error']}
         assets = [asset_payload(id) for id in ranked]
         selected = request.get('selectedAssetID')
         selected_asset = asset_payload(selected) if selected in eligible_members else None

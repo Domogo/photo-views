@@ -440,7 +440,7 @@ import PhotoViewsCore
             case .success(let progress):
                 self.visualCoverage = SearchCoverage(total:progress.total,embedded:progress.embedded,failed:progress.failed)
                 if progress.processed == 0 || Date().timeIntervalSince(self.lastVisualRefresh) >= 1 {
-                    self.lastVisualRefresh = Date(); self.refreshAssets()
+                    self.lastVisualRefresh = Date(); if !self.searching { self.refreshAssets() }
                 }
                 if progress.processed == 0 || self.visualPaused { self.visualIndexing = false }
                 else { self.indexVisualBatch() }
@@ -469,7 +469,7 @@ import PhotoViewsCore
                         let queued = self.queuedSources; self.queuedSources = []; self.startIndexing(queued)
                     }
                 }
-                self.refreshAssets()
+                if !self.searching { self.refreshAssets() }
                 self.startPaletteIndexing()
                 if !self.visualPaused { self.startVisualIndexing() }
             }

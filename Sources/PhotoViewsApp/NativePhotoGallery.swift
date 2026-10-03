@@ -66,7 +66,7 @@ private final class MasonryCollectionLayout: NSCollectionViewLayout {
             guard let w = asset.metadata?.width, let h = asset.metadata?.height, w > 0, h > 0 else { return 1 }
             return [5,6,7,8].contains(asset.metadata?.orientation ?? 1) ? Double(h)/Double(w) : Double(w)/Double(h)
         }
-        let result = GalleryGeometry.frames(aspects:aspects,width:width,y:12)
+        let result = GalleryGeometry.frames(aspects:aspects,width:width,y:12,clusters:assets.map(\.nearDuplicateGroup))
         var offset = 0
         for (section,group) in groups.enumerated() {
             for item in group.assets.indices {
@@ -146,8 +146,8 @@ struct NativePhotoGallery: NSViewRepresentable {
             query.grouping = .none; query.sorting = .captureNewest
             if let previousQuery, previousQuery != query { resetScrollPending = true }
             previousQuery = query
-            let groups = ResultGrouping.groups(model.assets,by:model.recipe.grouping,sources:model.sources,ranked:model.isRankedSearch,sorting:model.recipe.sorting)
-            let next = groups.map { $0.id+":"+$0.assets.map { $0.id.uuidString+String($0.asset.modifiedAt?.timeIntervalSince1970 ?? 0)+($0.thumbnailPath ?? "") }.joined(separator:"|") }.joined(separator:";")
+            let groups = ResultGrouping.groups(model.assets,by:model.usesVisualVectors && model.recipe.grouping == .folder ? .none : model.recipe.grouping,sources:model.sources,ranked:model.isRankedSearch,sorting:model.recipe.sorting)
+            let next = groups.map { $0.id+":"+$0.assets.map { $0.id.uuidString+String($0.asset.modifiedAt?.timeIntervalSince1970 ?? 0)+($0.thumbnailPath ?? "")+($0.nearDuplicateGroup ?? "") }.joined(separator:"|") }.joined(separator:";")
             if signature != next {
                 let oldSelected = model.selectedAssetID
                 let oldVisible = collection?.visibleItems().compactMap { collection?.indexPath(for:$0) }.sorted { a,b in (layout.items[a]?.frame.minY ?? 0)<(layout.items[b]?.frame.minY ?? 0) }.first

@@ -10,6 +10,9 @@ final class CatalogTests {
     func tearDownWithError() throws { try FileManager.default.removeItem(at:root) }
     func testGalleryGeometry() throws {
         let aspects = (0..<20000).map { [1.5,0.6666666667,1.0][ $0 % 3 ] }
+        let clustered = GalleryGeometry.frames(aspects:[1,0.5,0.5,1],width:1180,clusters:[nil,"pair","pair",nil])
+        try expectEqual(clustered.frames[1].minY,clustered.frames[2].minY)
+        try expectTrue(abs(clustered.frames[1].maxX+8-clustered.frames[2].minX)<0.001)
         let start = Date()
         for width in [780.0,1180.0,1800.0] {
             let result = GalleryGeometry.frames(aspects:aspects,width:width)

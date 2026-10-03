@@ -3,7 +3,7 @@
 import json, sqlite3, tempfile, unittest
 from pathlib import Path
 import numpy as np
-from worker import Worker, MODEL_VERSION, reciprocal_rank_fusion
+from worker import Worker, MODEL_VERSION, reciprocal_rank_fusion, near_duplicate_order
 
 class SearchChecks(unittest.TestCase):
     def setUp(self):
@@ -75,6 +75,15 @@ class SearchChecks(unittest.TestCase):
         self.assertNotIn('d',[a['asset']['id'] for a in more['assets']])
         for invalid in [-1,1.1,float('nan'),True]:
             with self.assertRaises(ValueError):self.worker.query({'recipe':dict(recipe,minimumSimilarity=invalid),'mode':'visual'})
+
+    def test_near_duplicates_require_visual_and_perceptual_agreement(self):
+        a=np.zeros(512,dtype=np.float32);a[0]=1
+        b=a.copy();c=np.zeros(512,dtype=np.float32);c[1]=1
+        order,groups=near_duplicate_order(['a','c','b','d'],{'a':a,'b':b,'c':c,'d':a},lambda id:{'a':0,'b':1,'c':0,'d':2**64-1}[id],np)
+        self.assertEqual(order,['a','b','c','d'])
+        self.assertEqual(groups,{'a':'a','b':'a'})
+        order,groups=near_duplicate_order(['a','b'],{'a':a,'b':b},lambda id:None,np)
+        self.assertEqual(order,['a','b']);self.assertFalse(groups)
 
     def test_complete_metadata_constraints(self):
         payload={'lens':'Prime','iso':400,'aperture':2.8,'shutterSeconds':0.002,'width':6000,'height':4000,'format':'JPG','camera':'Nikon','captureDateText':'2025:11:06'}

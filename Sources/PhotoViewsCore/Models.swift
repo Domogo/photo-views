@@ -155,6 +155,7 @@ public struct IndexJobRecord: Identifiable, Codable {
 }
 
 public struct IndexedAsset: Identifiable, Codable {
+    public var nearDuplicateGroup: String?
     public var photoID: UUID?
     public var pairedAssetIDs: [UUID]?
     public var favorite: Bool?

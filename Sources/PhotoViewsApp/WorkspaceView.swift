@@ -221,7 +221,7 @@ struct WorkspaceView: View {
         }.padding(.horizontal,12).padding(.vertical,10)
     }
     private var viewOptions: some View {
-        Menu(model.recipe.grouping == .none ? "View" : "View · \(model.recipe.grouping.title)") {
+        Menu(model.usesVisualVectors && model.recipe.grouping == .folder ? "View · Similar shots" : model.recipe.grouping == .none ? "View" : "View · \(model.recipe.grouping.title)") {
                     Picker("Search",selection:Binding(get:{ model.searchMode },set:{ model.searchMode = $0 })) {
                         Text("Natural language").tag("visual")
                         Text("Filename or keyword").tag("filename")
