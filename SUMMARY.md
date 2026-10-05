@@ -12,39 +12,15 @@ The motivating problem is a large personal archive: filenames rarely describe wh
 
 ## App images
 
-These are real native app captures from local implementation reviews, not mockups. They contain private archive photographs and remain in the Git-ignored `.impeccable/review/` directory. They render in this local checkout; sharing the Markdown alone or viewing it on GitHub will not include the images. Use the local preview for today's presentation.
+These are real native app captures using original, procedurally generated landscape artwork. They demonstrate the gallery and controls without publishing private archive photos, faces or metadata. The artwork is covered by the repository MIT license. It is synthetic demo content, not evidence of photographic retrieval quality or RAW compatibility.
 
-Some captures predate subsequent refinements: the canvas examples show older group headings and a 100-result limit. The current gallery is continuous without headings and loads qualifying results incrementally, starting with 500. People captures show an in-progress scan before the latest refinement.
+![Native photo-first gallery with generated demonstration artwork](docs/images/gallery.png)
 
-### Photo-first workspace
+![Native expandable exact-filter and palette controls](docs/images/filters.png)
 
-![Native Photo Views gallery with full-proportion camera photos](.impeccable/review/canvas-wide-gallery.png)
+![Native dominant-blue palette results with a visible minimum-area constraint](docs/images/palette.png)
 
-Photos carry the visual weight. Navigation and Details are optional; selecting a photo opens the inspector. The current implementation retains full proportions, narrow gutters, light/dark system appearance, and keyboard navigation.
-
-### Overall-palette search
-
-![Native dominant-blue palette search with an explicit minimum-area chip](.impeccable/review/canvas-wide-palette.png)
-
-The chip makes the rule visible: blue must be a largest color family and cover at least the chosen image area. The displayed count belongs to this historical capture.
-
-### Anonymous People browser
-
-![Native People browser with face avatars and progressive scan coverage](.impeccable/review/people-browser-wide.png)
-
-Avatars open suggested person groups. Coverage and Pause remain visible during scanning; no names are inferred.
-
-### Selected person's photos
-
-![Native photo gallery scoped to one anonymous person with restore-exclusions control](.impeccable/review/people-person-wide.png)
-
-The same gallery supports person-scoped browsing and further search/filtering. Incorrect matches can be excluded and restored.
-
-### RAW+JPEG details and dark appearance
-
-![Native paired-photo inspector with separate original-file members](.impeccable/review/canvas-wide-pair.png)
-
-![Compact native gallery in dark appearance](.impeccable/review/canvas-compact-dark-gallery.png)
+Private People, RAW and offline review captures remain excluded from Git. Their recorded verification is described below and in the milestone notes.
 
 ## What we built
 
@@ -75,7 +51,7 @@ OpenCLIP has an image encoder and a text encoder. Both produce **normalized 512-
 
 Inference uses PyTorch **MPS on Apple Silicon**, falling back to CPU when unavailable. The checkpoint's preprocessing configuration and matching tokenizer are used. After setup/downloads, inference loads local weights with offline flags. The app does not upload images or queries or download weights during search.
 
-This is pretrained-model integration; we did not train a new visual foundation model. The repository records MIT licensing for the checkpoint and separate OpenCLIP software licensing, alongside model-card deployment limitations. Production suitability remains a follow-up decision; see [M0_STATUS.md](M0_STATUS.md).
+This is pretrained-model integration; we did not train a new visual foundation model. The repository records MIT licensing for the checkpoint and separate OpenCLIP software licensing, alongside model-card deployment limitations. Production suitability remains a follow-up decision; see [M0_STATUS.md](docs/history/M0_STATUS.md).
 
 ### Suggested subjects: reuse the visual embeddings
 
@@ -85,7 +61,7 @@ No extra captioning model is required. Scores are cosine similarity, not indepen
 
 ### People: YuNet + SFace
 
-Whole-image CLIP vectors are not used to recognize a person. The People pipeline uses **OpenCV YuNet (2023mar)** for face detection and **SFace (2021dec)** for normalized **128-dimensional face descriptors**. Setup pins OpenCV Zoo revision `47534e27c9851bb1128ccc0102f1145e27f23f98`, verifies model checksums, and uses `opencv-python-headless==4.11.0.86`; the model-directory licenses are recorded as Apache 2.0.
+Whole-image CLIP vectors are not used to recognize a person. The People pipeline uses **OpenCV YuNet (2023mar)** for face detection and **SFace (2021dec)** for normalized **128-dimensional face descriptors**. Setup pins OpenCV Zoo revision `47534e27c9851bb1128ccc0102f1145e27f23f98`, verifies model checksums, and uses `opencv-python-headless==4.11.0.86`; the pinned YuNet license is MIT and SFace is Apache 2.0.
 
 Detection operates on cached previews with detection score ≥ **0.9** and faces at least **32 pixels**. Automatic matching uses group averages plus member support, provisional cosine threshold **0.50**, and a **0.04** ambiguity margin. Distinct faces in one photo cannot join the same suggested group.
 
@@ -192,10 +168,9 @@ The PRD's ≥80% held-out top-ten retrieval hit rate, ≥90% interpretation agre
 2. Keep the coverage disclosure available and describe partial indexing honestly. People may begin/resume scanning on entry; use existing groups rather than waiting for a complete scan.
 3. Use **⌘F** for search, **Space** for preview, **⌘− / ⌘+** for gallery zoom and **⌘0** to reset. **Exit Similar** leaves reference mode; Clear Filters removes exact constraints. Clear visual text separately if needed.
 4. Save a view before showing another workflow. A saved view and a manual collection demonstrate different concepts.
-5. For the offline story, use the recorded recovery screenshot below or a disposable test source. The prior physical integration test used a disposable APFS volume.
+5. For the offline story, use the recorded recovery evidence in the milestone notes or a disposable test source. The prior physical integration test used a disposable APFS volume.
 6. If the worker setup is missing, filename browsing remains a useful fallback. A missing external runtime/weights prevents visual or face inference; do not initiate a model download during the presentation.
 
-![Cached visual search after a disposable drive was unmounted and the app restarted](.impeccable/review/m7-wide-offline.png)
 
 ### Local build and checks
 
@@ -235,8 +210,8 @@ The app is generated at `.build/app/Photo Views.app`. The default catalog is `~/
 ## Source map
 
 - Product and scope: [prd.md](prd.md), [PRODUCT.md](PRODUCT.md), [IMPLEMENTATION_MILESTONES.md](IMPLEMENTATION_MILESTONES.md).
-- Native design and revision evidence: [DESIGN.md](DESIGN.md), [UX_PLAN.md](UX_PLAN.md), [CANVAS_STATUS.md](CANVAS_STATUS.md), [.impeccable/surfaces/main-workspace.md](.impeccable/surfaces/main-workspace.md).
-- Milestone details: [M0](M0_STATUS.md), [M1](M1_STATUS.md), [M2](M2_STATUS.md), [M3](M3_STATUS.md), [M4](M4_STATUS.md), [M5](M5_STATUS.md), [M6](M6_STATUS.md), [M7](M7_STATUS.md).
+- Native design and revision evidence: [DESIGN.md](DESIGN.md), [UX_PLAN.md](docs/history/UX_PLAN.md), [CANVAS_STATUS.md](docs/history/CANVAS_STATUS.md), [.impeccable/surfaces/main-workspace.md](.impeccable/surfaces/main-workspace.md).
+- Milestone details: [M0](docs/history/M0_STATUS.md), [M1](docs/history/M1_STATUS.md), [M2](docs/history/M2_STATUS.md), [M3](docs/history/M3_STATUS.md), [M4](docs/history/M4_STATUS.md), [M5](docs/history/M5_STATUS.md), [M6](docs/history/M6_STATUS.md), [M7](docs/history/M7_STATUS.md).
 - Search/ranking: [worker.py](scripts/search/worker.py), [QueryPlan.swift](Sources/PhotoViewsCore/QueryPlan.swift), [SearchBridge.swift](Sources/PhotoViewsApp/SearchBridge.swift).
 - Local analysis: [tag_vocabulary.json](scripts/search/tag_vocabulary.json), [palette.py](scripts/search/palette.py), [people.py](scripts/search/people.py).
 - Catalog/indexing/gallery: [Catalog.swift](Sources/PhotoViewsCore/Catalog.swift), [IndexCoordinator.swift](Sources/PhotoViewsCore/IndexCoordinator.swift), [NativePhotoGallery.swift](Sources/PhotoViewsApp/NativePhotoGallery.swift).

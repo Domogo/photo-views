@@ -1,6 +1,6 @@
 # Photo Views — Implementation Milestones
 
-Status: implementation backlog, 2026-10-02. M0–M7 implementation and bounded evidence are tracked in their status documents; M8 verification/demo handoff remains pending. Drive reconnection and RAW+JPEG integrity are tracked in [M7_STATUS.md](M7_STATUS.md). M6’s six approved examples pass; broader held-out plan agreement remains M8; see [M6_STATUS.md](M6_STATUS.md).
+Status: implementation backlog, 2026-10-02. M0–M7 implementation and bounded evidence are tracked in their status documents; M8 verification/demo handoff remains pending. Drive reconnection and RAW+JPEG integrity are tracked in [M7_STATUS.md](docs/history/M7_STATUS.md). M6’s six approved examples pass; broader held-out plan agreement remains M8; see [M6_STATUS.md](docs/history/M6_STATUS.md).
 
 Authority: [prd.md](prd.md) for requirements, [PRODUCT.md](PRODUCT.md) for durable context, [DESIGN.md](DESIGN.md) for the selected Photo Workbench direction, and [.impeccable/surfaces/main-workspace.md](.impeccable/surfaces/main-workspace.md) for workspace behavior.
 

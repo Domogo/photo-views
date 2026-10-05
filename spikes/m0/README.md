@@ -33,10 +33,10 @@ python3 -m venv '/absolute/external/cache/venv'
 '/absolute/external/cache/venv/bin/python' spikes/m0/retrieval.py --model '/absolute/external/cache/model' --probe '/absolute/path/to/probe/run' --queries '/absolute/path/to/human-labels.json' --output '/absolute/path/to/fresh/retrieval/run' --device mps
 ```
 
-The model fetch reads public model assets only and records the immutable checkpoint revision. Retrieval reads local derivatives and labels; it never sends images or queries to a provider. Weights, vectors, labels, and results stay outside Git. Run after downloads with networking disabled to verify the offline claim.
+The model fetch reads public model assets only, pins the validated immutable revision and verifies SHA-256 checksums. Retrieval reads local derivatives and labels; it never sends images or queries to a provider. Weights, vectors, labels, and results stay outside Git. Run after downloads with networking disabled to verify the offline claim.
 
 Copy queries.example.json outside Git and replace every placeholder with actual manifest IDs and human judgments. Include visual descriptions and separate query-by-example cases (exclude the reference itself). Use meaningful non-relevant candidates; top-10 success with fewer than ten images is not evidence of good ranking. Event/session-separated held-out evaluation remains necessary. This spike does not yet implement metadata filtering or text/visual fusion.
 
 ## Acceptance record
 
-See ../../M0_STATUS.md. Real RAW fixtures, human labels, pipeline color validation, and decoder fallback decisions are required before M0 can pass.
+See [M0 status](../../docs/history/M0_STATUS.md). Real RAW fixtures, human labels, pipeline color validation, and decoder fallback decisions are required before M0 can pass.

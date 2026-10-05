@@ -10,7 +10,7 @@ Native macOS. Impeccable 4.2.2's documented platform values do not include macOS
 
 ## Stack
 
-PRD recommendation: SwiftUI with AppKit where needed, SQLite, local inference, initially targeting Apple Silicon. A local Python worker is an allowed prototype option; Core ML is a production candidate after validation. Minimum macOS version, inference backend, and distribution format remain undecided.
+Implemented prototype: SwiftUI/AppKit, SQLite, ImageIO and local Python/OpenCLIP/PyTorch inference on Apple Silicon. The package declares macOS 14; runtime evidence is on macOS 26.6.2. Delivery is an ad-hoc signed developer build with external runtime/weights. Core ML and standalone distribution remain follow-ups.
 
 ## Users
 
@@ -55,7 +55,7 @@ Working name: Photo Views. Native macOS behavior, optional source/details panes,
 
 ## Evidence on Hand
 
-`prd.md` contains requirements, research links, architecture recommendations, proposed acceptance targets, and a demo sequence. At preparation time the repository contains no app implementation, photo fixtures, measured benchmarks, or approved visual assets. Do not present targets as achieved results or imply blanket RAW compatibility.
+The repository contains the native app, local workers, synthetic checks, developer setup and original generated public demo captures. Milestone evidence is under `docs/history/`; SUMMARY.md distinguishes measured samples from unmet targets. Private fixtures/captures and models remain excluded. Do not present targets as achieved results or imply blanket RAW compatibility.
 
 ## Product Principles
 
@@ -67,7 +67,7 @@ Working name: Photo Views. Native macOS behavior, optional source/details panes,
 
 ## Accessibility & Inclusion
 
-Preserve keyboard navigation and selection where possible, as required by the PRD. Additional recommended implementation criteria are recorded as proposals in UX_PLAN.md rather than confirmed user requirements.
+Preserve keyboard navigation and selection where possible, as required by the PRD. Additional recommended implementation criteria are recorded as proposals in docs/history/UX_PLAN.md rather than confirmed user requirements.
 
 ## Open Decisions
 

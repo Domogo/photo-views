@@ -1,6 +1,6 @@
 # Photo Views — Proposed UX Plan
 
-Prepared from [prd.md](prd.md) and [PRODUCT.md](PRODUCT.md). Scope: native macOS MVP workflow planning, without implementation; Photo Workbench is the selected visual direction. PRD requirements are binding; interaction details below are proposals for review.
+Prepared from [prd.md](../../prd.md) and [PRODUCT.md](../../PRODUCT.md). Scope: native macOS MVP workflow planning, without implementation; Photo Workbench is the selected visual direction. PRD requirements are binding; interaction details below are proposals for review.
 
 ## Job, audience, and outcome
 
