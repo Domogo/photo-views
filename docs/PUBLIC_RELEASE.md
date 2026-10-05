@@ -21,10 +21,10 @@ Gitleaks 8.30.1 was downloaded from its official GitHub release and verified aga
 
 This is bounded audit evidence, not a guarantee that no sensitive value exists. Private images, weights, catalogs, face crops/descriptors, caches, generated reports and credentials remain excluded. Only native captures of original generated artwork were added to version control. The public SUMMARY now uses tracked public-safe images rather than broken links to private review captures.
 
-Existing Git commits contain the maintainer's personal author email. History is preserved: rewriting published commit IDs is a separate deliberate decision. Before visibility changes, confirm whether that existing metadata is acceptable. Future author metadata can use the maintainer's GitHub no-reply address if desired.
+Existing Git commits contain the maintainer's personal author email. History is preserved: rewriting published commit IDs is a separate deliberate decision. The user explicitly approved public visibility with existing history and author metadata preserved on 5 October 2026. Future author metadata can use the maintainer's GitHub no-reply address if desired.
 
 ## Repository settings
 
-Description and topics are set. No Actions, hosted builds, paid automation or infrastructure was added. Private vulnerability reporting was requested while the repository was private; GitHub returned HTTP 404. The SECURITY document provides a maintainer-profile fallback. Retry enabling and verify the reporting route after publication; no functioning private-report channel is claimed yet.
+Description and topics are set. No Actions, hosted builds, paid automation or infrastructure was added. Private vulnerability reporting initially returned HTTP 404 while the repository was private. After publication it was enabled successfully, and GitHub’s reporting-settings endpoint confirmed `enabled: true`. The SECURITY document links the private reporting route and retains a maintainer-profile fallback.
 
-Repository visibility remains private during preparation. Public visibility makes the full reachable Git history and tracked content available to everyone. The user should review the concrete prepared state before that final step. Concurrent app-branding edits were excluded from the preparation commit; align public naming with that work before publication if it is being shipped together.
+The repository became public on 5 October 2026 after explicit user approval; GitHub confirmed `PUBLIC` visibility. Existing reachable Git history and tracked content are publicly available. Concurrent app-branding edits were excluded from preparation/publication commits and remain separate work.
