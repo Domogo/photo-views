@@ -18,24 +18,102 @@ private enum GalleryThumbnails {
         return NSImage(cgImage:image,size:NSSize(width:image.width,height:image.height))
     }
 }
+private final class GalleryCard: NSView {
+    var hoverChanged: ((Bool) -> Void)?
+    private var tracking: NSTrackingArea?
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let next = NSTrackingArea(rect:.zero,options:[.mouseEnteredAndExited,.activeInKeyWindow,.inVisibleRect],owner:self,userInfo:nil)
+        addTrackingArea(next); tracking = next
+    }
+    override func mouseEntered(with event: NSEvent) { hoverChanged?(true) }
+    override func mouseExited(with event: NSEvent) { hoverChanged?(false) }
+    override func resetCursorRects() { addCursorRect(bounds,cursor:.pointingHand) }
+}
 private final class GalleryCell: NSCollectionViewItem {
     private var operation: Operation?
     private var imageKey = ""
+    private var hovered = false
+    private var actionsVisible = false
+    private var actions = NSStackView()
+    private var favoriteButton: NSButton?
+    private var actionKey = ""
+    private var favoriteAction: (() -> Void)?
+    private var editorActions: [() -> Void] = []
     override func loadView() {
-        view = NSView(); view.wantsLayer = true
+        let card = GalleryCard(); card.wantsLayer = true; view = card
+        card.hoverChanged = { [weak self] hovered in self?.hovered = hovered; self?.updateSelection() }
         let image = NSImageView(); image.imageScaling = .scaleProportionallyUpOrDown; image.imageAlignment = .alignCenter
         image.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(image); imageView = image
         NSLayoutConstraint.activate([image.leadingAnchor.constraint(equalTo:view.leadingAnchor),image.trailingAnchor.constraint(equalTo:view.trailingAnchor),image.topAnchor.constraint(equalTo:view.topAnchor),image.bottomAnchor.constraint(equalTo:view.bottomAnchor)])
+        actions.orientation = .horizontal; actions.spacing = 4; actions.edgeInsets = NSEdgeInsets(top:4,left:4,bottom:4,right:4)
+        actions.translatesAutoresizingMaskIntoConstraints = false; actions.wantsLayer = true; actions.layer?.cornerRadius = 5
+        view.addSubview(actions)
+        NSLayoutConstraint.activate([actions.topAnchor.constraint(equalTo:view.topAnchor,constant:8),actions.trailingAnchor.constraint(equalTo:view.trailingAnchor,constant:-8)])
         view.setAccessibilityElement(true); view.setAccessibilityRole(.button); image.setAccessibilityElement(false)
+        actions.isHidden = true
     }
     override var isSelected: Bool { didSet { updateSelection() } }
     private func updateSelection() {
-        view.layer?.borderWidth = isSelected ? 2 : 0
-        view.effectiveAppearance.performAsCurrentDrawingAppearance { view.layer?.borderColor = StillBrand.accent.cgColor }
+        view.layer?.borderWidth = isSelected ? 2 : hovered ? 1 : 0
+        view.effectiveAppearance.performAsCurrentDrawingAppearance {
+            view.layer?.borderColor = (isSelected ? StillBrand.accent : StillBrand.secondary).cgColor
+            actions.layer?.backgroundColor = NSColor(srgbRed:0.08,green:0.09,blue:0.085,alpha:0.94).cgColor
+        }
+        let visible = hovered || isSelected
+        guard visible != actionsVisible else { return }
+        actionsVisible = visible; actions.isHidden = !visible
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.12
+            actions.animator().alphaValue = visible ? 1 : 0
+        }
     }
-    override func prepareForReuse() { super.prepareForReuse(); operation?.cancel(); operation = nil; imageKey = ""; imageView?.image = nil }
-    func configure(_ asset: IndexedAsset, available: Bool) {
+    private func button(_ symbol: String, label: String, action: Selector) -> NSButton {
+        let button = NSButton(image:NSImage(systemSymbolName:symbol,accessibilityDescription:label)!,target:self,action:action)
+        button.bezelStyle = .inline; button.isBordered = false; button.imagePosition = .imageOnly
+        button.contentTintColor = NSColor(white:0.96,alpha:1); button.toolTip = label; button.setAccessibilityLabel(label)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([button.widthAnchor.constraint(equalToConstant:26),button.heightAnchor.constraint(equalToConstant:26)])
+        return button
+    }
+    @objc private func favoriteClicked() { favoriteAction?() }
+    private var editors: [PhotoEditor] = []
+    @objc private func editorClicked(_ sender: NSButton) {
+        guard !editorActions.isEmpty else { return }
+        if editorActions.count == 1 { editorActions[0](); return }
+        let menu = NSMenu(); menu.autoenablesItems = false
+        for (index,editor) in editors.enumerated() {
+            let item = NSMenuItem(title:"Open in " + editor.name,action:#selector(editorMenuClicked(_:)),keyEquivalent:"")
+            item.tag = index; item.target = self; menu.addItem(item)
+        }
+        menu.popUp(positioning:nil,at:NSPoint(x:0,y:sender.bounds.maxY),in:sender)
+    }
+    @objc private func editorMenuClicked(_ sender: NSMenuItem) { if editorActions.indices.contains(sender.tag) { editorActions[sender.tag]() } }
+    override func prepareForReuse() {
+        super.prepareForReuse(); operation?.cancel(); operation = nil; imageKey = ""; imageView?.image = nil
+        hovered = false; favoriteAction = nil; editorActions = []; actionKey = ""; actionsVisible = false; actions.isHidden = true; actions.alphaValue = 0
+    }
+    func configure(_ asset: IndexedAsset, available: Bool, editors: [PhotoEditor], favorite: @escaping () -> Void, openEditor: @escaping (PhotoEditor) -> Void) {
         view.setAccessibilityLabel(asset.filename+", "+(available ? "original available" : "original offline"))
+        self.editors = editors
+        favoriteAction = favorite; editorActions = editors.map { editor in { openEditor(editor) } }
+        let nextActions = editors.map(\.id).joined(separator:"|")
+        if actionKey != nextActions || actions.arrangedSubviews.isEmpty {
+            for child in actions.arrangedSubviews { actions.removeArrangedSubview(child); child.removeFromSuperview() }
+            let favorite = button("heart",label:"Favorite",action:#selector(favoriteClicked)); favoriteButton = favorite; actions.addArrangedSubview(favorite)
+            if !editors.isEmpty {
+                let label = editors.count == 1 ? "Open in " + editors[0].name : "Open in photo editor"
+                let editor = button("arrow.up.forward.app",label:label,action:#selector(editorClicked(_:)))
+                editor.tag = 0; actions.addArrangedSubview(editor)
+            }
+            actionKey = nextActions
+        }
+        let isFavorite = asset.favorite == true
+        favoriteButton?.image = NSImage(systemSymbolName:isFavorite ? "heart.fill" : "heart",accessibilityDescription:isFavorite ? "Remove favorite" : "Favorite")
+        favoriteButton?.toolTip = isFavorite ? "Remove favorite" : "Favorite"
+        favoriteButton?.setAccessibilityLabel(isFavorite ? "Remove favorite" : "Favorite")
+        for button in actions.arrangedSubviews.dropFirst(1).compactMap({ $0 as? NSButton }) { button.isEnabled = available }
         updateSelection()
         let key = (asset.thumbnailPath ?? "")+String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0)
         guard key != imageKey else { return }
@@ -136,6 +214,7 @@ struct NativePhotoGallery: NSViewRepresentable {
         fileprivate weak var collection: GalleryCollection?
         var observer: NSObjectProtocol?
         private var signature = ""
+        private var favorites: [UUID:Bool] = [:]
         private var previousQuery: ViewRecipe?
         private var resetScrollPending = false
         private var loadingCount = -1
@@ -143,6 +222,7 @@ struct NativePhotoGallery: NSViewRepresentable {
         init(model: WorkspaceModel) { self.model = model }
         fileprivate func update(_ model: WorkspaceModel) {
             self.model = model
+            favorites = Dictionary(uniqueKeysWithValues:model.assets.map { ($0.id,$0.favorite == true) })
             var query = model.recipe
             query.grouping = .none; query.sorting = .captureNewest
             if let previousQuery, previousQuery != query { resetScrollPending = true }
@@ -164,13 +244,16 @@ struct NativePhotoGallery: NSViewRepresentable {
                 collection?.reloadData(); layout.invalidateLayout(); collection?.layoutSubtreeIfNeeded()
                 if changedGrouping && !resetScrollPending, let id = oldSelected ?? anchor, let path = path(for:id) { collection?.scrollToItems(at:[path],scrollPosition:.top) }
             }
-            if resetScrollPending && !model.searching, let scroll = collection?.enclosingScrollView {
+            if resetScrollPending && (!model.searching || model.cachedResultsVisible), let scroll = collection?.enclosingScrollView {
                 scroll.contentView.scroll(to:.zero)
                 scroll.reflectScrolledClipView(scroll.contentView)
                 resetScrollPending = false
             }
             if let selected = model.selectedGalleryID, let path = path(for:selected) { collection?.selectionIndexPaths = [path] }
             else { collection?.selectionIndexPaths = [] }
+            for item in collection?.visibleItems() ?? [] {
+                if let path = collection?.indexPath(for:item), let cell = item as? GalleryCell { configure(cell,at:path) }
+            }
         }
         fileprivate func didScroll() {
             guard let scroll = collection?.enclosingScrollView else { return }
@@ -193,49 +276,39 @@ struct NativePhotoGallery: NSViewRepresentable {
         func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int { layout.groups[section].assets.count }
         func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt path: IndexPath) -> NSCollectionViewItem {
             let cell = collectionView.makeItem(withIdentifier:galleryItemID,for:path) as! GalleryCell
-            let asset = layout.groups[path.section].assets[path.item]
-            cell.configure(asset,available:asset.available && model.availability[asset.asset.sourceID] == "Connected"); return cell
+            configure(cell,at:path); return cell
+        }
+        private func configure(_ cell: GalleryCell, at path: IndexPath) {
+            guard layout.groups.indices.contains(path.section), layout.groups[path.section].assets.indices.contains(path.item) else { return }
+            var asset = layout.groups[path.section].assets[path.item]
+            asset.favorite = favorites[asset.id]
+            cell.configure(asset,available:asset.available && model.availability[asset.asset.sourceID] == "Connected",editors:model.installedEditors,
+                favorite:{ [weak model] in model?.toggleFavorite(asset.id) },
+                openEditor:{ [weak model] editor in model?.openOriginal(asset,in:editor.url) })
         }
         func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt paths: Set<IndexPath>) {
             if let path = paths.first { model.selectAsset(layout.groups[path.section].assets[path.item].id) }
         }
         fileprivate func menu(_ path: IndexPath) -> NSMenu {
             let menu = NSMenu(); menu.autoenablesItems = false
-            for (title,action) in [("Preview",#selector(openPreview)),("Find Similar",#selector(findSimilar)),("Reveal Original in Finder",#selector(reveal))] {
+            for (title,action) in [("Preview",#selector(openPreview)),(model.selectedFavorite ? "Remove Favorite" : "Favorite",#selector(toggleFavorite)),("Find Similar",#selector(findSimilar)),("Reveal Original in Finder",#selector(reveal))] {
                 let item = NSMenuItem(title:title,action:action,keyEquivalent:""); item.target = self; menu.addItem(item)
             }
             if model.recipe.personID != nil {
                 let item = NSMenuItem(title:"Not This Person",action:#selector(removePersonMatch),keyEquivalent:"")
                 item.target = self; menu.addItem(item)
             }
-            let editors = installedPhotoEditors()
+            let editors = model.installedEditors
             if !editors.isEmpty { menu.addItem(.separator()) }
-            for (name,url) in editors {
-                let item = NSMenuItem(title:"Open in " + name,action:#selector(openEditor(_:)),keyEquivalent:"")
-                item.target = self; item.representedObject = url
+            for editor in editors {
+                let item = NSMenuItem(title:"Open in " + editor.name,action:#selector(openEditor(_:)),keyEquivalent:"")
+                item.target = self; item.representedObject = editor.url
                 item.isEnabled = model.selectedAsset.map { model.originalAvailable($0) } ?? false
                 menu.addItem(item)
             }
             return menu
         }
-        private func installedPhotoEditors() -> [(String,URL)] {
-            var found: [String:URL] = [:]
-            let roots = [URL(fileURLWithPath:"/Applications"),FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
-            for root in roots {
-                guard let entries = FileManager.default.enumerator(at:root,includingPropertiesForKeys:nil,options:[.skipsHiddenFiles,.skipsPackageDescendants]) else { continue }
-                for case let url as URL in entries {
-                    if entries.level > 3 { entries.skipDescendants(); continue }
-                    guard url.pathExtension == "app", let bundle = Bundle(url:url) else { continue }
-                    let name = (bundle.object(forInfoDictionaryKey:"CFBundleDisplayName") as? String ?? bundle.object(forInfoDictionaryKey:"CFBundleName") as? String ?? url.deletingPathExtension().lastPathComponent).lowercased()
-                    if name == "photomator" { found["Photomator"] = url }
-                    if name.contains("lightroom") {
-                        let label = name.contains("classic") ? "Lightroom Classic" : "Lightroom"
-                        found[label] = url
-                    }
-                }
-            }
-            return found.sorted { $0.key < $1.key }.map { ($0.key,$0.value) }
-        }
+        @objc private func toggleFavorite() { model.toggleFavorite() }
         @objc private func removePersonMatch() { if let asset = model.selectedAsset { model.removeFromPerson(asset) } }
         @objc private func openEditor(_ sender: NSMenuItem) {
             guard let application = sender.representedObject as? URL else { return }

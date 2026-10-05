@@ -3,7 +3,7 @@ import PhotoViewsCore
 
 extension WorkspaceModel {
     func selectPeople() {
-        browsingPeople = true; selectedAssetID = nil; showInspector = false
+        cancelSearch(); browsingPeople = true; selectedAssetID = nil; showInspector = false
         refreshPeople()
     }
     func selectPerson(_ person: PersonGroup) {
@@ -36,7 +36,7 @@ extension WorkspaceModel {
         peopleBridge.request(payload,as:PeopleProgress.self) { [weak self] response in
             guard let self else { return }
             switch response {
-            case .success(let value): self.people = value.people; self.peopleProgress = value; self.peopleError = nil; completed(value)
+            case .success(let value): if payload["op"] as? String != "people" { self.invalidatePeopleSnapshots() }; self.people = value.people; self.peopleProgress = value; self.peopleError = nil; completed(value)
             case .failure(let error): self.peopleIndexing = false; self.peopleError = error.localizedDescription
             }
         }

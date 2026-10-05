@@ -10,6 +10,8 @@ colors:
   light-canvas: "color(srgb 0.969 0.965 0.949)"
   light-pane: "color(srgb 0.941 0.937 0.918)"
   jade-light: "color(srgb 0.20 0.37 0.33)"
+  photo-actions-background: "color(srgb 0.08 0.09 0.085 / 0.94)"
+  photo-actions-foreground: "color(srgb 0.96 0.96 0.96)"
 typography:
   navigation:
     fontFamily: "system-ui"
@@ -22,6 +24,7 @@ typography:
 rounded:
   search: "6pt"
   view-menu: "5pt"
+  gallery-actions: "5pt"
 spacing:
   control-gap: "8pt"
   content-inset: "20pt"
@@ -30,6 +33,7 @@ spacing:
   gallery-inset: "12pt"
   header-inset: "16pt"
   navigation-gap: "18pt"
+  gallery-actions: "4pt"
 components:
   workspace-header:
     backgroundColor: "{colors.graphite-pane}"
@@ -41,6 +45,14 @@ components:
   navigation-active:
     textColor: "{colors.jade-dark}"
     typography: "{typography.navigation-active}"
+  gallery-action-toolbar:
+    backgroundColor: "{colors.photo-actions-background}"
+    textColor: "{colors.photo-actions-foreground}"
+    rounded: "{rounded.gallery-actions}"
+    padding: "{spacing.gallery-actions}"
+  gallery-action:
+    textColor: "{colors.photo-actions-foreground}"
+    size: "26pt"
 ---
 
 # Design System: Still
@@ -51,9 +63,9 @@ components:
 
 Still is a quiet photographic workspace: understated, minimal, modern and bespoke. The user approved Graphite color, Atelier top navigation, and the Open Frame identity. Photographs supply the visual richness; precise geometry and sparse controls supply the craft. The approved composition is `.impeccable/mocks/comp-3.png`; the selected filled opposing-corner logo supersedes that concept's older outlined mark.
 
-This is an extracted native SwiftUI/AppKit design system. Brand.swift owns appearance colors and vector identity; WorkspaceView.swift owns navigation and controls. Latest release builds passed. Earlier CatalogChecks passed 20,000-item geometry at three widths, finite-query and persistence checks; inference behavior did not change. Fresh native wide captures cover Graphite gallery/folders, Light, blocked query, palette and corrected View menus in both appearances. `still-final-native-zoom.png` is a native wide capture, not compact evidence. Native accessibility actions verified ⌘2 Favorites, ⌘1 All photos and ⌘F search focus; “cars location:Paris” blocks with Search not run, while “mostly blue” applies the 25% palette filter and expands its drawer. The existing 19,877 catalog files and two saved views remain present.
+This is an extracted native SwiftUI/AppKit design system. Brand.swift owns appearance colors and vector identity; WorkspaceView.swift owns navigation and controls, PhotoInspector.swift owns selected-photo actions, and NativePhotoGallery.swift owns recycled gallery interaction. The user authorized subtle interaction animation within this established world. Motion supports local reveals and state changes while the archive remains stable.
 
-Reviewer disposition is **ship for the scored View contrast fix only**: the label/chevron are readable in corrected wide Light/Graphite captures, with no regression at that fix scope. Earlier titlebar and folder-heading fixes were also scored resolved. This is not full-surface acceptance. Compact/780pt capture was blocked by `CUA returned noWindowsAvailable` during edge resizing; full accessibility, high contrast, System appearance transitions and actual window dragging remain unverified. Image-generated concepts are design references, not native QA. The web build-phase remains a spec with unsuitable font/raster gates; it has not passed for this native application.
+Latest release build, CatalogChecks and `scripts/check_workspace.py` passed. Current wide native captures cover the action-first inspector in Graphite/Light, expanded Metadata, similarity return, a selected person, Light filters and corrected Collections controls in both appearances. Native accessibility actions verified favorite toggle/revert, installed editor presence, metadata disclosures, Collections opening its native menu, and an 80-photo person gallery returning to avatars and All photos (13,181 logical photos). Reviewer disposition is **ship for three scored fixes only**: Collections contrast in Light/Graphite including Light → Graphite, cache invalidation, and resuming canceled browse queries. No visible regression was found at that correction scope; this is not full-surface acceptance. Compact layout, pointer-only hover, measured motion/Reduce Motion timing and transient pagination feedback lack current capture evidence; full accessibility, high contrast, System appearance transitions and actual window dragging remain unverified. Photomator launched, but opening the selected original was not confirmed after editor CUA timed out; Lightroom was absent. Historical canvas and earlier Still review do not supply current acceptance. See the workspace brief for the bounded evidence record.
 
 **Key Characteristics:**
 
@@ -72,7 +84,7 @@ Jade supplies active navigation text and its 2pt underline, native tint and the 
 
 ### Neutral
 
-Canvas recedes behind photographs; pane separates navigation, folders and details tonally. Dark uses graphite-canvas/graphite-pane; light uses light-canvas/light-pane. Folder, Saved Views and Collections headings use secondary-dark/secondary-light. Other primary/secondary text, dividers, focus, menus and transient controls retain native semantic rendering. Palette-search swatches express named search families, not calibrated photograph colors.
+Canvas recedes behind photographs; pane separates navigation, folders and details tonally. Dark uses graphite-canvas/graphite-pane; light uses light-canvas/light-pane. Folder, Saved Views and Collections headings use secondary-dark/secondary-light. Other primary/secondary text, dividers, focus and menus retain native semantic rendering. The small gallery action toolbar retains a dark photo-actions-background with photo-actions-foreground symbols in both appearances so it stays readable over images. Palette-search swatches express named search families, not calibrated photograph colors.
 
 **The Photograph Rule.** Keep decorative color out of the image canvas.
 
@@ -94,13 +106,15 @@ The recycled NSCollectionView gallery uses shortest-column masonry, 8pt gutters 
 
 ## Elevation & Depth
 
-Flat tonal surfaces and separators establish hierarchy. Native menus, sheets and previews own transient elevation. Do not add shadows to individual photographs or decorative glass/glow. No archive-wide entrance animation; preserve selection and visible context when organization changes.
+Flat tonal surfaces and separators establish hierarchy. Native menus, sheets and previews own transient elevation. Do not add shadows to individual photographs or decorative glass/glow. The gallery action toolbar uses its source-defined dark translucent fill rather than a shadow. No archive-wide entrance animation; preserve selection and visible context when organization changes.
+
+Local filter and pane reveals, plus Metadata and RAW+JPEG disclosures, use 180ms ease-out. Gallery quick actions use a 120ms AppKit alpha fade. Reduce Motion removes these transitions. These values describe source behavior; measured timing and pointer-only hover remain unverified.
 
 ## Shapes
 
 The selected Open Frame mark consists of two filled opposing 90° corners with square edges, one top-left and one bottom-right. Preserve Brand.swift's exact normalized polygons and negative space; do not redraw as open stroked frames or round the corners. Resources/Brand/mark.svg and the generated Still.icns are identity assets. scripts/build_brand.swift regenerates the native icon, whose rounded container is separate from the angular mark.
 
-The search container has a source-defined 6pt radius and 1pt outline: primary text color at 12% opacity at rest, jade while focused. Native controls own their own radii and focus states. Photographs remain rectangular; People avatars remain circular.
+The search container has a source-defined 6pt radius and 1pt outline: primary text color at 12% opacity at rest, jade while focused. The compact gallery action toolbar has a 5pt radius. Native controls own their own radii and focus states. Photographs remain rectangular; People avatars remain circular.
 
 ## Components
 
@@ -112,7 +126,7 @@ Use the compact filled vector signature once in the header. All photos, Favorite
 
 The inset plain native field says “Find a moment…” in visual mode and “Search filenames or folders…” in keyword mode. In a unified header it uses canvas against pane; in the split search row it uses pane against canvas. Focus receives jade outline. Clear search has an accessible label. Filters, zoom and View remain adjacent. View uses a borderless native Menu with the default indicator hidden, an explicit primary-text label and 8pt semibold chevron, 6pt gap, 8pt horizontal/4pt vertical padding, 5pt radius and 6% primary-color source background. Native rendering supplies its final menu treatment. View includes appearance choices Dark/Light/System, search mode, grouping, sorting, saving, pairing and refresh. Graphite dark is the initial default.
 
-Plain visual descriptions use debounced retrieval. Supported mixed queries apply on Return; unsupported or ambiguous clauses remain visible for correction. Blocked plans say Search not run/Search needs correction; never imply an executed zero-result search. Constraints remain individually removable and saved definitions update explicitly.
+Plain visual descriptions use debounced retrieval. Supported mixed queries apply on Return; unsupported or ambiguous clauses remain visible for correction. Blocked plans say Search not run/Search needs correction; never imply an executed zero-result search. Constraints remain individually removable and saved definitions update explicitly. In Similar photos, the x action is labeled Clear similarity search and keeps current filters and membership scope. The separate Back to all photos action clears search, reference, source, favorite, collection and person membership scope, exact/palette constraints and saved-view selection; grouping, sorting and pair-collapse presentation persist.
 
 ### Exact and palette chips
 
@@ -124,15 +138,21 @@ A bounded scrollable drawer starts with Minimum match score for visual mode (0�
 
 ### Image-only masonry gallery
 
-Recycled AppKit collection items preserve full orientation-aware proportions without captions or decorative cards. Selection opens details; double-click or Space opens preview. Arrow keys use spatial masonry navigation. Accessibility labels include filename and preview/original availability. Context actions provide Preview, Find Similar and Reveal Original in Finder. RAW+JPEG member switching preserves the logical gallery highlight while per-file metadata and organization remain distinct. Historical canvas checks confirmed Down selection, Space preview and JPEG/NEF member switching. A 3,416-item logical gallery reached the bottom and remained responsive; an idle observation showed 0% CPU and approximately 258MiB RSS. These are bounded session observations, not a frame-rate benchmark or broad performance guarantee.
+Recycled AppKit collection items preserve full orientation-aware proportions without captions or decorative cards. Hover uses a 1pt secondary outline; selection uses a 2pt jade outline and opens details. Hover or selection reveals Favorite and an installed-editor action at the top right, inset 8pt, with 26pt buttons and 4pt padding/gap. A single editor opens directly; multiple editors use a native menu. Original availability disables editor actions. Symbols, tooltips and accessible labels reflect favorite state. Action closures rebind to every configured asset even when a reused cell retains the same preview image key; reuse clears old actions and images.
+
+Double-click or Space opens preview. Arrow keys use spatial masonry navigation. Accessibility labels include filename and original availability. Context actions provide Preview, Find Similar and Reveal Original in Finder. RAW+JPEG member switching preserves the logical gallery highlight while per-file metadata and organization remain distinct. Historical canvas checks confirmed Down selection, Space preview and JPEG/NEF member switching. A 3,416-item logical gallery reached the bottom and remained responsive; an idle observation showed 0% CPU and approximately 258MiB RSS. These are bounded session observations, not a frame-rate benchmark or broad performance guarantee.
 
 ### Status, empty and failure states
 
-One disclosure row combines result count and indexed coverage. Expanded details expose preview, visual-search and palette progress, pause/resume/retry controls and individual failures. No-source, indexing, no-match and catalog failure states use SF Symbols, readable native titles, explanatory text and actions. Active constraints remain present when no results match. Offline original availability is explicit in details; cached previews and metadata remain useful.
+One disclosure row combines result count and indexed coverage. Expanded details expose preview, visual-search and palette progress, pause/resume/retry controls and individual failures. Loading another 500-photo page keeps displayed images and adds a small bottom spinner with Loading more photos…; failure keeps those images and offers Retry. No-source, indexing, no-match and catalog failure states use SF Symbols, readable native titles, explanatory text and actions. Active constraints remain present when no results match. Offline original availability is explicit in details; cached previews and metadata remain useful.
+
+Return browsing may show up to six cached first pages, each bounded to 500 metadata records, while a worker refresh runs in the background. Keys preserve browse membership and sorting/pairing state; search, reference, palette and exact-filter results are never inferred from a broader cached page. Catalog/index changes, favorite/collection membership, pairing and availability changes invalidate browse pages. Person recognition/corrections invalidate person-scoped pages without flushing unrelated browsing. Entering People cancels pending photo search; returning to All resumes querying even after cancellation.
 
 ### Optional navigation and inspector
 
-Top navigation provides All photos, Favorites and People. The optional native sidebar List provides Folders, Saved Views and Collections. Source rows retain availability and access actions. The inspector uses ScrollView, LabeledContent and Divider for selected photo/source information, preview, pair members, confirmed/suggested tags, favorite/collection actions, original availability and recipe summary. Supporting information becomes available when needed rather than permanently consuming gallery space.
+Top navigation provides All photos, Favorites and People. The optional native sidebar List provides Folders, Saved Views and Collections. Source rows retain availability and access actions. The selected-photo inspector starts with filename, Favorite and Preview, then Open in installed Photomator/Lightroom editors. Discovery uses Launch Services and Applications folders; absent editors are omitted and unavailable originals disable opening. This launches the original through macOS without changing catalog or file semantics.
+
+The preview and original-availability message remain visible, followed by Find Similar, Collections and tags. Collections uses the same explicit primary label/chevron treatment as View. Metadata is a smaller caption-content disclosure, collapsed by default, containing per-file metadata, path and Reveal Original in Finder. RAW+JPEG and View settings also start collapsed. Pair member actions and tags apply to the selected file. Native ScrollView, LabeledContent, Divider, disclosures and small controls retain system behavior; supporting information becomes available when needed rather than permanently consuming gallery space.
 
 ### Sheets and native controls
 
@@ -140,7 +160,7 @@ Save View and New Collection use rounded-border name fields, native buttons, Can
 
 ### People and continuity
 
-People uses the top navigation and anonymous circular avatars, native scan/refine controls, explicit partial coverage and contextual person-gallery actions. The existing recognition caveats, reversible merges/exclusions and local-only processing remain product behavior. Its earlier native probes are historical, not this redesign's visual acceptance.
+People uses the top navigation and anonymous circular avatars, native scan/refine controls, explicit partial coverage and contextual person-gallery actions. Back to People returns a selected person gallery to avatars; All photos clears person membership scope. The existing recognition caveats, reversible merges/exclusions and local-only processing remain product behavior. Its earlier native probes are historical, not this refinement's visual acceptance.
 
 Still.app keeps `com.domogo.photoviews` and existing Photo Views catalog/cache locations. Identity changes do not create a new catalog, change originals or promise new recognition capabilities.
 
@@ -152,6 +172,9 @@ Still.app keeps `com.domogo.photoviews` and existing Photo Views catalog/cache l
 - **Do** use appearance-aware source colors, native SF text and keyboard/menu behavior.
 - **Do** preserve full proportions, readable constraints and honest file/photo counts.
 - **Do** make folders, filters and details available on demand.
+- **Do** keep immediate photo actions visible and secondary Metadata, RAW+JPEG and View settings collapsed initially.
+- **Do** bind quick actions to the current asset and retain images during pagination loading or failure.
+- **Do** use the bounded interaction motion and remove it with Reduce Motion.
 - **Do** validate the actual native implementation; wide Light/Graphite evidence does not cover compact layout.
 
 ### Don't:

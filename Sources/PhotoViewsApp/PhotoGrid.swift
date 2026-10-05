@@ -31,7 +31,24 @@ struct CachedPhoto: View {
 }
 struct PhotoGrid: View {
     @ObservedObject var model: WorkspaceModel
-    var body: some View { NativePhotoGallery(model:model) }
+    var body: some View {
+        NativePhotoGallery(model:model)
+            .overlay(alignment:.bottom) {
+                if model.loadingMore || model.paginationError != nil {
+                    HStack(spacing:8) {
+                        if model.loadingMore { ProgressView().controlSize(.small); Text("Loading more photos…").font(.caption) }
+                        else {
+                            Text("More photos couldn’t load").font(.caption).help(model.paginationError ?? "")
+                            Button("Retry") { model.refreshAssets(loadMore:true) }.controlSize(.small)
+                        }
+                    }
+                        .padding(.horizontal,14).padding(.vertical,10)
+                        .background(Color(nsColor:StillBrand.pane),in:RoundedRectangle(cornerRadius:6))
+                        .padding(.bottom,12)
+                        .accessibilityElement(children:.combine)
+                }
+            }
+    }
 }
 struct PhotoPreview: View {
     @ObservedObject var model: WorkspaceModel

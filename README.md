@@ -54,7 +54,7 @@ mostly blue
 
 Use camera/folder values actually present in your catalog. Unsupported or ambiguous clauses show correction UI. Exact constraints are never silently broadened. Minimum match score is cosine similarity, not a confidence percentage.
 
-**⌘F** focuses search; **Space** previews a photo; **⌘− / ⌘+** change gallery density; **⌘0** resets it. Select a photo for Details or Find Similar. People is in the optional sidebar.
+**⌘F** focuses search; **Space** previews a photo; **⌘− / ⌘+** change gallery density; **⌘0** resets it. Select a photo for Details or Find Similar. People is in the top header.
 
 ![Native palette results with an explicit dominant-blue rule](docs/images/palette.png)
 
@@ -100,6 +100,7 @@ The CLIP model card lists deployed use as out of scope. This project's code lice
 ```sh
 swift run CatalogChecks
 swift run IndexChecks
+python3 scripts/check_workspace.py
 "$HOME/Library/Caches/PhotoViews/m0/venv/bin/python" scripts/search/checks.py
 python3 scripts/build_app.py --release
 ```

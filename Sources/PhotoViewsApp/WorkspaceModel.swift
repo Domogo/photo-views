@@ -41,6 +41,10 @@ import PhotoViewsCore
     @Published var assetLimit = 500
     var searchMode: String { get { recipe.searchMode ?? "visual" } set { recipe.searchMode = newValue } }
     @Published var searching = false
+    @Published var loadingMore = false
+    @Published var paginationError: String?
+    @Published private(set) var cachedResultsVisible = false
+    @Published var installedEditors = PhotoEditor.installed()
     @Published var searchFocusRequest = 0
     @Published var searchError: String?
     @Published var resultCount = 0
@@ -60,6 +64,8 @@ import PhotoViewsCore
     private var searchGeneration = 0
     private var lastVisualRefresh = Date.distantPast
     private var searchTask: Task<Void,Never>?
+    // Only browse pages are cached; exact recipe keys prevent leaking search/person membership.
+    private var browseSnapshots = BrowseSnapshots()
     private lazy var searchBridge = SearchBridge(catalogURL:catalogURL)
     private let indexer = IndexCoordinator()
     private var queuedSources: [CatalogSource] = []
@@ -123,7 +129,7 @@ import PhotoViewsCore
     func useCurrentSearchModel() {
         recipe.modelVersion = Self.modelVersion; recipe.rankingVersion = Self.rankingVersion
     }
-    func persistRecipe() {
+    func persistRecipe(refreshIfUnchanged: Bool = false) {
         guard let catalog else { return }
         do {
             let previous = persistedRecipe
@@ -133,7 +139,7 @@ import PhotoViewsCore
             // Regrouping is pure presentation. Preserve loaded membership and don't call the worker.
             if var previous {
                 previous.grouping = recipe.grouping
-                if previous == recipe { return }
+                if previous == recipe { if refreshIfUnchanged { refreshAssets() }; return }
             }
             var previousMembership = previous
             previousMembership?.grouping = recipe.grouping; previousMembership?.sorting = recipe.sorting
@@ -141,7 +147,12 @@ import PhotoViewsCore
             refreshAssets()
         } catch { errorMessage = error.localizedDescription }
     }
-    func selectAll() { browsingPeople = false; recipe.personID = nil; selectedSavedView = nil; recipe.collectionID = nil; recipe.favoritesOnly = nil; recipe.sourceIDs = []; persistRecipe() }
+    func selectAll() {
+        browsingPeople = false; selectedSavedView = nil; queryPlan = nil
+        var all = ViewRecipe(); all.grouping = recipe.grouping; all.sorting = recipe.sorting; all.collapsePairs = recipe.collapsePairs
+        recipe = all; selectedAssetID = nil; retainedSelection = nil; showInspector = false; assetLimit = 500
+        persistRecipe(refreshIfUnchanged:true)
+    }
     func selectSource(_ source: CatalogSource) { browsingPeople = false; recipe.personID = nil; selectedSavedView = nil; recipe.collectionID = nil; recipe.favoritesOnly = nil; recipe.sourceIDs = [source.id]; persistRecipe() }
     func selectView(_ view: SavedView) { browsingPeople = false; selectedSavedView = view.id; assetLimit = 500; recipe = view.recipe; persistRecipe(); refreshAssets() }
 
@@ -168,14 +179,21 @@ import PhotoViewsCore
         do { try catalog.addManualTag(name,to:id,replacing:prior); refreshSelectedOrganization(); refreshAssets(); return true }
         catch { errorMessage = error.localizedDescription; return false }
     }
-    func toggleFavorite() {
-        guard let id = selectedAssetID else { return }
-        do { try catalog?.setFavorite(id,!selectedFavorite); selectedFavorite.toggle(); refreshAssets() }
+    func toggleFavorite(_ assetID: UUID? = nil) {
+        guard let catalog, let id = assetID ?? selectedAssetID else { return }
+        do {
+            let favorite = !(try catalog.isFavorite(id))
+            try catalog.setFavorite(id,favorite)
+            for index in assets.indices where assets[index].id == id { assets[index].favorite = favorite }
+            if retainedSelection?.id == id { retainedSelection?.favorite = favorite }
+            if selectedAssetID == id { selectedFavorite = favorite }
+            invalidateBrowseSnapshots(); refreshAssets()
+        }
         catch { errorMessage = error.localizedDescription }
     }
     func toggleCollection(_ collection: CollectionRecord) {
         guard let id = selectedAssetID else { return }
-        do { try catalog?.setMembership(id,collection:collection.id,member:!selectedCollections.contains(collection.id)); refreshSelectedOrganization(); refreshAssets() }
+        do { try catalog?.setMembership(id,collection:collection.id,member:!selectedCollections.contains(collection.id)); invalidateBrowseSnapshots(); refreshSelectedOrganization(); refreshAssets() }
         catch { errorMessage = error.localizedDescription }
     }
     func chooseFolder(reauthorizing source: CatalogSource? = nil) {
@@ -254,7 +272,7 @@ import PhotoViewsCore
             }
         }
         do { sources = try catalog.sources() } catch { errorMessage = error.localizedDescription }
-        if priorAvailability != availability { refreshAssets() }
+        if priorAvailability != availability { invalidateBrowseSnapshots(); refreshAssets() }
         if !reconnected.isEmpty { startIndexing(reconnected) }
     }
     @discardableResult func saveView(name: String, update: Bool = false) -> Bool {
@@ -340,7 +358,7 @@ import PhotoViewsCore
         guard extracted.palette != nil || extracted.ambiguous || !plan.canApply || plan.grouping != nil || plan.filters != recipe.filters || plan.visualIntent != recipe.search.trimmingCharacters(in:.whitespacesAndNewlines) else { return false }
         queryPlan = plan; searchError = nil
         if plan.canApply && apply { applyQueryPlan(); persistRecipe() }
-        else { searching = false; assets = []; resultCount = 0 }
+        else { searching = false; loadingMore = false; paginationError = nil; cachedResultsVisible = false; assets = []; resultCount = 0 }
         return true
     }
     func submitSearch() { if !resolveSearchInput() { refreshAssets() } }
@@ -354,7 +372,8 @@ import PhotoViewsCore
         searchMode = "visual"; queryPlan = nil
     }
     func clearFilters() { recipe.filters = ExactFilters() }
-    func exitSimilar() { recipe.referenceAssetID = nil; recipe.search = "" }
+    func clearSearch() { queryPlan = nil; recipe.referenceAssetID = nil; recipe.search = ""; persistRecipe() }
+    func exitSimilar() { clearSearch() }
     func findSimilar() {
         guard let id = selectedAssetID else { return }
         recipe.referenceAssetID = id; recipe.search = ""; searchMode = "visual"
@@ -367,21 +386,33 @@ import PhotoViewsCore
         if let date = recipe.filters.toDate { filters["toDay"] = formatter.string(from:date) }
         value["filters"] = filters; return value
     }
-    func refreshAssets() {
+    func invalidateBrowseSnapshots() { browseSnapshots.invalidate() }
+    func invalidatePeopleSnapshots() { browseSnapshots.invalidatePeople() }
+    func cancelSearch() {
+        searchGeneration += 1; searchTask?.cancel(); searching = false; loadingMore = false; paginationError = nil; cachedResultsVisible = false
+    }
+    func refreshAssets(loadMore: Bool = false) {
         guard let catalog else { return }
         indexProgress = (try? catalog.progress()) ?? []
         searchGeneration += 1; let generation = searchGeneration
         searchTask?.cancel()
+        loadingMore = loadMore; paginationError = nil; cachedResultsVisible = false
+        let requestedRecipe = recipe
+        if !loadMore, assetLimit == 500, let snapshot = browseSnapshots.restore(recipe) {
+            assets = snapshot.assets.map { normalizeCache($0) }; resultCount = snapshot.resultCount
+            searchError = nil; cachedResultsVisible = true
+        }
         let requestedSelection = selectedAssetID
         let payload: [String:Any] = ["op":"query","recipe":requestRecipe(),"mode":searchMode,"limit":assetLimit,"selectedAssetID":selectedAssetID?.uuidString ?? ""]
         searching = true
         searchTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds:180_000_000)
+            if !loadMore && !requestedRecipe.search.isEmpty { try? await Task.sleep(nanoseconds:180_000_000) }
             guard !Task.isCancelled, let self else { return }
             if self.resolveSearchInput(apply:false) { return }
             self.searchBridge.request(payload,as:SearchResult.self) { [weak self] response in
                 guard let self, self.searchGeneration == generation else { return }
                 self.searching = false
+                self.loadingMore = false; self.cachedResultsVisible = false
                 switch response {
                 case .success(let result):
                     self.searchError = nil
@@ -389,6 +420,7 @@ import PhotoViewsCore
                     self.tagCoverage = result.tagCoverage ?? TagCoverage(total:0,prepared:0)
                     self.tagVocabularyVersion = result.tagVersion
                     self.assets = result.assets.map { self.normalizeCache($0) }
+                    self.browseSnapshots.remember(result,for:requestedRecipe)
                     self.refreshSelectedOrganization()
                     self.resultCount = result.resultCount; self.cameras = result.cameras; self.lenses = result.lenses ?? []; self.formats = result.formats ?? []; self.visualCoverage = result.coverage
                     if let id = self.selectedAssetID {
@@ -399,7 +431,8 @@ import PhotoViewsCore
                     }
                     self.refreshSelectedOrganization()
                 case .failure(let error):
-                    self.searchError = error.localizedDescription; self.assets = []; self.resultCount = 0
+                    if loadMore { self.paginationError = error.localizedDescription }
+                    else { self.searchError = error.localizedDescription; self.assets = []; self.resultCount = 0 }
                 }
             }
         }
@@ -465,7 +498,7 @@ import PhotoViewsCore
             }
         }
     }
-    func loadMore() { guard assetLimit < resultCount else { return }; assetLimit += 500; refreshAssets() }
+    func loadMore() { guard assetLimit < resultCount, !searching else { return }; assetLimit += 500; refreshAssets(loadMore:true) }
     func startIndexing(_ requested: [CatalogSource]? = nil) {
         let targets = requested ?? scopedSources
         guard !targets.isEmpty, isReady else { return }
@@ -486,6 +519,7 @@ import PhotoViewsCore
                         let queued = self.queuedSources; self.queuedSources = []; self.startIndexing(queued)
                     }
                 }
+                self.invalidateBrowseSnapshots()
                 if !self.searching { self.refreshAssets() }
                 self.startPaletteIndexing()
                 if !self.visualPaused { self.startVisualIndexing() }
@@ -511,18 +545,18 @@ import PhotoViewsCore
     }
     func separateSelectedPair() {
         guard let id = selectedAssetID else { return }
-        do { try catalog?.separatePair(containing:id); refreshAssets() } catch { errorMessage = error.localizedDescription }
+        do { try catalog?.separatePair(containing:id); invalidateBrowseSnapshots(); refreshAssets() } catch { errorMessage = error.localizedDescription }
     }
     func restorePairs() {
-        do { for source in scopedSources { try catalog?.restorePairing(sourceID:source.id) }; refreshAssets() }
+        do { for source in scopedSources { try catalog?.restorePairing(sourceID:source.id) }; invalidateBrowseSnapshots(); refreshAssets() }
         catch { errorMessage = error.localizedDescription }
     }
     func originalAvailable(_ asset: IndexedAsset) -> Bool {
         guard asset.available, availability[asset.asset.sourceID] == "Connected", let root = resolvedRoots[asset.asset.sourceID] else { return false }
         return FileManager.default.isReadableFile(atPath:root.appendingPathComponent(asset.asset.relativePath).path)
     }
-    func openOriginal(in application: URL) {
-        guard let asset = selectedAsset, originalAvailable(asset), let root = resolvedRoots[asset.asset.sourceID] else {
+    func openOriginal(_ requested: IndexedAsset? = nil, in application: URL) {
+        guard let asset = requested ?? selectedAsset, originalAvailable(asset), let root = resolvedRoots[asset.asset.sourceID] else {
             errorMessage = "Reconnect the source drive or restore access to open this original."
             return
         }

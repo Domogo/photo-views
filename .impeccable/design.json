@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-05T09:51:13.807064+00:00",
+  "generatedAt": "2026-10-05T11:38:44.970690+00:00",
   "title": "Design System: Still",
   "extensions": {
     "nativePlatform": {
@@ -17,15 +17,20 @@
         "Sources/PhotoViewsApp/NativePhotoGallery.swift",
         "Sources/PhotoViewsCore/GalleryGeometry.swift",
         "Sources/PhotoViewsApp/Brand.swift",
-        "scripts/build_brand.swift"
+        "scripts/build_brand.swift",
+        "Sources/PhotoViewsApp/PhotoInspector.swift",
+        "Sources/PhotoViewsApp/PhotoEditors.swift",
+        "Sources/PhotoViewsApp/BrowseSnapshots.swift",
+        "Sources/PhotoViewsApp/PeopleBrowser.swift"
       ],
       "colorSemantics": {
         "canvas": "StillBrand.canvas, appearance-aware source sRGB",
         "pane": "StillBrand.pane, appearance-aware source sRGB",
         "accent": "StillBrand.accent, appearance-aware jade",
         "text": "native primary/secondary",
-        "selection": "2pt jade outline; native keyboard focus",
-        "folderHeadings": "StillBrand.secondary; #B7BDB8 dark / #5A605B light"
+        "selection": "2pt jade selected outline; 1pt secondary hover outline; native keyboard focus",
+        "folderHeadings": "StillBrand.secondary; #B7BDB8 dark / #5A605B light",
+        "photoActions": "DESIGN.md photo-actions-background / photo-actions-foreground in both appearances"
       },
       "typographySemantics": {
         "emptyStateTitle": "title2 semibold",
@@ -36,9 +41,11 @@
         "supportingText": "caption",
         "emptyStateSymbol": "system size 36pt, light",
         "navigation": "13pt regular, active semibold",
-        "identity": "Custom vector StillWordmark; not a font"
+        "identity": "Custom vector StillWordmark; not a font",
+        "photoFilename": "subheadline medium, two lines maximum",
+        "photoDisclosures": "subheadline label; Metadata and View settings content caption"
       },
-      "geometry": "Filled opposing-corner mark and custom sharp vector wordmark; search radius 6pt; native controls own other radii."
+      "geometry": "Filled opposing-corner mark and custom sharp vector wordmark; search radius 6pt; compact gallery action toolbar uses rounded.gallery-actions; other native controls own their radii."
     },
     "nativeLayout": {
       "units": "pt",
@@ -90,38 +97,45 @@
       }
     },
     "verification": {
-      "revision": "Still Graphite / Atelier / selected Open Frame",
-      "disposition": "ship for the scored View contrast fix only; not full-surface acceptance",
-      "sourceCompilation": "Latest release builds passed",
-      "renderedReview": "Fresh wide native Light/Graphite captures reviewed; titlebar and heading fixes resolved; final View label/chevron contrast fixed with no regression at scored scope",
-      "historicalEvidence": "2026-10-02 canvas review and 2026-10-03 People probes apply to previous surfaces only; no inherited ship verdict",
+      "revision": "Still interaction refinement — 2026-10-05",
+      "disposition": "ship for three scored fixes only: Collections contrast, browse snapshot invalidation and resuming canceled browse queries; not full-surface acceptance",
+      "sourceCompilation": "Latest release build passed",
+      "renderedReview": "Current wide native inspector/metadata/similar/person/filter captures validated; corrected Collections label/chevron readable in Light/Graphite including Light → Graphite, with no visible regression at the three scored fixes.",
+      "historicalEvidence": "Earlier canvas, People and Still View/titlebar/heading reviews remain historical; no inherited full-surface acceptance.",
       "followUpVerification": [
-        "Compact/780pt layout: capture blocked by CUA returned noWindowsAvailable during edge resizing",
+        "Current compact/780pt layout capture",
         "Full accessibility and high contrast",
+        "Pointer-only hover interaction",
+        "Measured motion and Reduce Motion timing",
+        "Transient pagination spinner/failure capture",
         "System appearance transitions",
-        "Actual window dragging"
+        "Actual window dragging",
+        "Photomator opening the selected original: launched, but editor CUA timed out before selected-file confirmation; Lightroom absent"
       ],
-      "localChecks": "CatalogChecks passed: 20,000-item geometry at three widths, persisted views/sources and finite-query checks",
+      "localChecks": "Release build, CatalogChecks and scripts/check_workspace.py passed; workspace checks cover bounded snapshot keys/invalidation and navigation including canceled-browse resumption.",
       "captures": [
-        ".impeccable/review/still-final-wide.png",
-        ".impeccable/review/still-final-folders.png",
-        ".impeccable/review/still-final-native-zoom.png",
-        ".impeccable/review/still-final-light.png",
-        ".impeccable/review/still-final-blocked-light.png",
-        ".impeccable/review/still-final-palette-light.png",
-        ".impeccable/review/still-menu-fixed-light.png",
-        ".impeccable/review/still-menu-fixed-dark.png"
+        ".impeccable/review/interactions-inspector-dark.png",
+        ".impeccable/review/interactions-inspector-light.png",
+        ".impeccable/review/interactions-metadata-dark.png",
+        ".impeccable/review/interactions-similar-dark.png",
+        ".impeccable/review/interactions-person-dark.png",
+        ".impeccable/review/interactions-filters-light.png",
+        ".impeccable/review/interactions-collections-fixed-light.png",
+        ".impeccable/review/interactions-collections-fixed-dark.png"
       ],
       "verifiedInteraction": [
-        "\u23182 Favorites; \u23181 All photos; \u2318F search focus",
-        "cars location:Paris blocks with Search not run",
-        "mostly blue applies 25% palette condition and expands drawer"
+        "Native AX Favorite toggle and revert",
+        "Installed editor presence; Photomator launch only",
+        "Metadata disclosure behavior",
+        "Selected person: 80 photos; Back to People returns to avatars; All photos: 13,181 logical photos",
+        "Collections AX click opens the native menu"
       ],
       "catalogContinuity": {
-        "files": 19877,
-        "savedViews": 2
+        "historicalFiles": 19877,
+        "historicalSavedViews": 2,
+        "currentAllLogicalPhotos": 13181
       },
-      "evidenceLimits": "native-zoom capture is wide; imagegen concepts are not native QA; web build-phase remains spec and unsuitable font/raster gates have not passed"
+      "evidenceLimits": "Eight captures are wide and remain local/excluded from Git; no compact, pointer-only hover, measured motion/Reduce Motion timing or transient pagination evidence. Imagegen concepts are not native QA; web build-phase remains spec with unsuitable font/raster gates."
     },
     "paletteSearch": {
       "version": "srgb-hsv-area-v1",
@@ -137,7 +151,7 @@
     "nativeGalleryResources": {
       "decode": "Background ImageIO thumbnail decode, maximum 512px dimension",
       "maximumConcurrentOperations": 4,
-      "reuse": "Cancel pending operation and clear image on cell reuse; identity check before display",
+      "reuse": "Cancel pending decode, clear image and action closures on reuse; identity check before image display; rebind actions for every configured asset.",
       "cacheLimits": {
         "bytes": 67108864,
         "images": 256
@@ -193,7 +207,108 @@
     "nativeMenu": {
       "implementation": "Borderless native Menu, hidden default indicator; explicit primary label and 8pt semibold chevron",
       "sourceTreatment": "6pt label gap; 8x4pt padding; 5pt radius; 6% primary background",
-      "rendering": "Native Menu supplies final treatment"
+      "rendering": "Native Menu supplies final treatment",
+      "scope": [
+        "View",
+        "Inspector Collections"
+      ]
+    },
+    "motion": [
+      {
+        "name": "gallery-quick-actions",
+        "value": "120ms",
+        "purpose": "AppKit alpha fade for hover/selected quick actions; no explicitly supplied easing curve."
+      },
+      {
+        "name": "local-reveal",
+        "value": "180ms ease-out",
+        "purpose": "SwiftUI filter/pane reveals and Metadata/RAW+JPEG disclosure changes."
+      }
+    ],
+    "motionPolicy": {
+      "reduceMotion": "Remove these transitions through SwiftUI accessibilityReduceMotion and AppKit accessibilityDisplayShouldReduceMotion.",
+      "archive": "No entrance or archive-wide animation; preserve identity and visible context.",
+      "verification": "Source-backed values; measured motion and Reduce Motion timing are unverified."
+    },
+    "nativeGalleryInteractions": {
+      "hoverOutline": {
+        "width": "1pt",
+        "color": "StillBrand.secondary"
+      },
+      "selectedOutline": {
+        "width": "2pt",
+        "color": "StillBrand.accent"
+      },
+      "quickActions": {
+        "visibility": "Hovered or selected cell",
+        "placement": "Top right, 8pt inset",
+        "primitiveRefs": {
+          "toolbar": "components.gallery-action-toolbar",
+          "button": "components.gallery-action",
+          "gap": "spacing.gallery-actions"
+        },
+        "actions": "Favorite plus installed-editor action; one editor opens directly, multiple editors use a native menu.",
+        "availability": "Original availability disables editor action; Favorite remains catalog-local.",
+        "reuse": "Rebind current-asset action closures on every configure independently of preview image key; clear actions on reuse."
+      }
+    },
+    "nativeInspector": {
+      "immediateActions": [
+        "Favorite",
+        "Preview",
+        "Open in installed Photomator/Lightroom editor"
+      ],
+      "editors": "Discover with Launch Services and Applications folders; omit absent editors, disable unavailable originals and open the selected original through NSWorkspace.",
+      "visibleSupport": [
+        "preview",
+        "original availability",
+        "Find Similar",
+        "Collections",
+        "tags"
+      ],
+      "collapsedInitially": [
+        "Metadata",
+        "RAW + JPEG",
+        "View settings"
+      ],
+      "metadata": "Caption content in a subheadline disclosure; per-file fields/path and Reveal Original in Finder.",
+      "pairing": "Selected member determines file actions and tags while logical gallery selection persists.",
+      "controls": "Native small SwiftUI controls, ScrollView, LabeledContent, Divider and disclosures."
+    },
+    "browseSnapshots": {
+      "maximumPages": 6,
+      "maximumMetadataRecordsPerPage": 500,
+      "purpose": "Immediate first-page return browsing while a worker refresh runs in the background.",
+      "key": "Exact normalized browse recipe; retains source/favorite/collection/person membership, sorting and collapsePairs.",
+      "eligibility": "Empty search, no reference, no palette and default ExactFilters only; never infer search/filter membership from a broader page.",
+      "normalizedPresentationFields": [
+        "grouping",
+        "minimumSimilarity",
+        "modelVersion",
+        "rankingVersion",
+        "searchMode"
+      ],
+      "storedSelection": "Omitted from snapshots",
+      "allBrowseInvalidation": [
+        "catalog/index changes",
+        "favorite/collection membership",
+        "pairing",
+        "availability"
+      ],
+      "personPagesOnlyInvalidation": "Recognition changes and person corrections",
+      "resources": "Metadata navigation cache, separate from bounded thumbnail caches and inference."
+    },
+    "nativeNavigation": {
+      "similarityClear": "Clear similarity search x removes search/reference and query plan; keeps current filters and membership scope.",
+      "backToAllPhotos": "Clears search/reference, source/favorite/collection/person membership, exact/palette filters and saved-view selection; preserves grouping, sorting and pair-collapse presentation.",
+      "backToPeople": "Explicit action from selected person gallery to anonymous avatars.",
+      "canceledBrowse": "Entering People cancels photo search; All photos starts a query even after cancellation."
+    },
+    "paginationFeedback": {
+      "batch": "500 photos",
+      "loading": "Retain displayed images; small bottom ProgressView and Loading more photos…",
+      "failure": "Retain displayed images; More photos couldn’t load and Retry",
+      "implementation": "Native PhotoGrid overlay; transient native capture remains unverified."
     }
   },
   "components": [],
@@ -220,49 +335,62 @@
     },
     {
       "name": "Masonry gallery",
-      "implementation": "NSCollectionView recycled cells; deterministic shortest-column geometry; full orientation-aware proportions; 2pt accent outline; native focus; spatial arrows and Space preview; bounded background ImageIO decoding"
+      "implementation": "Recycled NSCollectionView full-proportion masonry; 1pt secondary hover/2pt jade selection; compact Favorite/installed-editor quick actions bound per current asset; spatial arrows, Space preview and bounded ImageIO decode."
     },
     {
       "name": "Combined status",
-      "implementation": "Compact result/index disclosure with detailed progress, failures and retry actions"
+      "implementation": "Compact result/index disclosure with progress, failures and retry; pagination retains images and supplies bottom spinner/Retry."
     },
     {
       "name": "Optional supporting panes",
-      "implementation": "Native sidebar List and inspector ScrollView; initially hidden; selection opens inspector"
+      "implementation": "Native sidebar List and inspector ScrollView; initially hidden; selection opens action-first inspector with collapsed secondary disclosures."
     },
     {
       "name": "Saving and collection sheets",
       "implementation": "Native fields/actions with Cancel/default shortcuts and blank-name disabling"
+    },
+    {
+      "name": "Selected photo inspector",
+      "implementation": "Favorite/Preview/installed-editor actions first; preview, availability, Find Similar, Collections and tags; Metadata/RAW+JPEG/View settings collapsed initially; native small controls."
     }
   ],
   "narrative": {
     "northStar": "Atelier in Graphite",
-    "overview": "Quiet, photographic, understated, minimal, modern and bespoke native Still. Graphite default, Atelier top navigation, selected filled-corner identity and sharp vector wordmark. Wide native review resolves titlebar/headings and returns ship for the scored View contrast fix only; compact and broader accessibility remain unverified.",
+    "overview": "Still is a quiet photographic workspace: understated, minimal, modern and bespoke. The user approved Graphite color, Atelier top navigation, and the Open Frame identity. Photographs supply the visual richness; precise geometry and sparse controls supply the craft. The approved composition is `.impeccable/mocks/comp-3.png`; the selected filled opposing-corner logo supersedes that concept's older outlined mark.\n\nThis is an extracted native SwiftUI/AppKit design system. Brand.swift owns appearance colors and vector identity; WorkspaceView.swift owns navigation and controls, PhotoInspector.swift owns selected-photo actions, and NativePhotoGallery.swift owns recycled gallery interaction. The user authorized subtle interaction animation within this established world. Motion supports local reveals and state changes while the archive remains stable.",
     "keyCharacteristics": [
-      "Photographs lead at full proportions",
-      "Native functional text and keyboard/menu behavior",
-      "Top navigation with optional folders, filters and details",
-      "Explicit constraints, coverage, availability and photo/file semantics"
+      "Graphite by default, with Light and System choices.",
+      "Sharp vector identity and native functional typography.",
+      "Top navigation and supporting tools on demand.",
+      "Full-proportion photographs with clear constraints, coverage and availability."
     ],
     "rules": [
       {
         "name": "The Photograph Rule",
-        "body": "Decorative color stays out of the archive canvas.",
+        "body": "Keep decorative color out of the image canvas.",
         "section": "colors"
       },
       {
         "name": "The Label Rule",
-        "body": "Actions remain understandable through text, tooltips, menus and accessible names.",
+        "body": "Core actions remain understandable through text, menus, tooltips and accessible names.",
         "section": "typography"
       }
     ],
     "dos": [
-      "Do use exact source colors and selected vector identity.",
-      "Do review native dark/light and compact/wide states."
+      "Do keep the approved Graphite/Atelier composition and selected filled-corner identity.",
+      "Do use appearance-aware source colors, native SF text and keyboard/menu behavior.",
+      "Do preserve full proportions, readable constraints and honest file/photo counts.",
+      "Do make folders, filters and details available on demand.",
+      "Do keep immediate photo actions visible and secondary Metadata, RAW+JPEG and View settings collapsed initially.",
+      "Do bind quick actions to the current asset and retain images during pagination loading or failure.",
+      "Do use the bounded interaction motion and remove it with Reduce Motion.",
+      "Do validate the actual native implementation; wide Light/Graphite evidence does not cover compact layout."
     ],
     "donts": [
-      "Don't restore a permanent navigation rail.",
-      "Don't treat old canvas captures as redesign approval."
+      "Don't restore a permanent navigation rail or replace the selected mark with the concept's outlined mark.",
+      "Don't use custom logo lettering as the functional UI typeface.",
+      "Don't add gallery captions, decorative cards, glass or archive-wide animation.",
+      "Don't hide partial coverage, unavailable originals or blocked query clauses.",
+      "Don't claim new-world QA passed from earlier captures."
     ]
   }
 }

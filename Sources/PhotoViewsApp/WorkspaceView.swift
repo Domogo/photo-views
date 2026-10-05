@@ -11,6 +11,7 @@ struct WorkspaceView: View {
     @ObservedObject var model: WorkspaceModel
     @AppStorage("stillFoldersVisible") private var sidebarVisible = false
     @AppStorage("stillAppearance") private var appearance = "dark"
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
     @State private var saving = false
     @State private var creatingCollection = false
@@ -29,22 +30,24 @@ struct WorkspaceView: View {
             workspaceHeader
             Divider()
             HSplitView {
-                if sidebarVisible { sidebar.frame(minWidth:180,idealWidth:220,maxWidth:260) }
+                if sidebarVisible { sidebar.frame(minWidth:180,idealWidth:220,maxWidth:260).transition(.opacity) }
                 VStack(spacing:0) {
                     if !model.browsingPeople {
                         if model.recipe.personID != nil {
-                            HStack { Button("People") { model.selectPeople() }; Spacer(); Button("Restore Excluded Photos") { model.restorePersonMatches() } }.padding(.horizontal,12).padding(.top,8)
+                            HStack { Button { model.selectPeople() } label: { Label("Back to People",systemImage:"chevron.left") }; Spacer(); Button("Restore Excluded Photos") { model.restorePersonMatches() }.controlSize(.small) }.padding(.horizontal,12).padding(.top,8)
                         }
                         if model.recipe.personID != nil, let error = model.peopleError { Text(error).font(.caption).foregroundStyle(.secondary).padding(.horizontal,12) }
                         recipeBar.fixedSize(horizontal:false,vertical:true)
+                            .animation(reduceMotion ? nil : .easeOut(duration:0.18),value:filtersVisible)
                         indexingBar
                     }
                     content.frame(maxWidth:.infinity,maxHeight:.infinity)
                 }
                 .frame(minWidth:360,maxWidth:.infinity,maxHeight:.infinity)
                 .background(Color(nsColor:StillBrand.canvas))
-                if model.showInspector { inspector.frame(minWidth:220,idealWidth:260,maxWidth:340) }
+                if model.showInspector { inspector.frame(minWidth:220,idealWidth:260,maxWidth:340).transition(.opacity) }
             }
+            .animation(reduceMotion ? nil : .easeOut(duration:0.18),value:model.showInspector)
         }
         .background(StillWindowChrome())
         .ignoresSafeArea(.container,edges:.top)
@@ -64,6 +67,9 @@ struct WorkspaceView: View {
         .sheet(isPresented:$saving) { SaveLiveViewSheet(model:model,saving:$saving,viewName:$viewName) }
         .sheet(isPresented:$creatingCollection) { CreateCollectionSheet(model:model,presented:$creatingCollection,name:$collectionName) }
         .sheet(isPresented:$model.previewPresented) { PhotoPreview(model:model) }
+    }
+    private func reveal(_ action: () -> Void) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration:0.18),action)
     }
     private var sidebarSelection: Binding<String?> {
         Binding(get: {
@@ -134,7 +140,7 @@ struct WorkspaceView: View {
     }
     private var wideHeader: Bool { availableWidth >= 1180 && !model.browsingPeople }
     private var hasRecipeDetails: Bool {
-        filtersVisible || queryHelp || model.queryPlan != nil || model.hasFilters || model.recipe.palette != nil || model.needsCurrentSearchModel
+        filtersVisible || queryHelp || model.recipe.referenceAssetID != nil || model.queryPlan != nil || model.hasFilters || model.recipe.palette != nil || model.needsCurrentSearchModel
     }
     private var activeDestination: String {
         if model.browsingPeople || model.recipe.personID != nil { return "people" }
@@ -164,12 +170,12 @@ struct WorkspaceView: View {
             if wideHeader { searchControls.frame(maxWidth:.infinity) }
             else { Spacer(minLength:8) }
             HStack(spacing:12) {
-                Button { sidebarVisible.toggle() } label: { Image(systemName:"folder") }
+                Button { reveal { sidebarVisible.toggle() } } label: { Image(systemName:"folder") }
                     .help("Folders, saved views and collections").accessibilityLabel("Show folders and saved views")
                     .accessibilityValue(sidebarVisible ? "Expanded" : "Collapsed")
                 Button { model.chooseFolder() } label: { Image(systemName:"folder.badge.plus") }
                     .disabled(!model.isReady).help("Add folder (⌘O)").accessibilityLabel("Add Folder")
-                Button { model.showInspector.toggle() } label: { Image(systemName:"sidebar.right") }
+                Button { reveal { model.showInspector.toggle() } } label: { Image(systemName:"sidebar.right") }
                     .help("Show or hide photo details").accessibilityLabel("Inspector")
             }.buttonStyle(.plain).foregroundStyle(.secondary)
         }
@@ -180,9 +186,11 @@ struct WorkspaceView: View {
 HStack(spacing:8) {
                 if let reference = model.referencePhoto {
                     CachedPhoto(path:reference.thumbnailPath,revision:reference.id.uuidString).frame(width:32,height:24)
-                    Text("Similar photo").font(.subheadline)
-                    Spacer()
-                    Button("Exit Similar") { model.exitSimilar() }
+                    Text("Similar photos").font(.subheadline).lineLimit(1)
+                    Spacer(minLength:0)
+                    Button { model.clearSearch() } label: { Image(systemName:"xmark.circle.fill") }
+                        .buttonStyle(.plain).accessibilityLabel("Clear similarity search")
+                        .help("Clear similarity search; keep your current filters")
                 } else {
                     HStack(spacing:8) {
                     Image(systemName:"magnifyingglass").foregroundStyle(.secondary)
@@ -191,13 +199,13 @@ HStack(spacing:8) {
                         .disabled(!model.isReady || model.sources.isEmpty)
                         .focused($searchFocused).onSubmit { model.submitSearch() }
                     if !model.recipe.search.isEmpty {
-                        Button { model.recipe.search = "" } label: { Image(systemName:"xmark.circle.fill") }.buttonStyle(.plain).accessibilityLabel("Clear search")
+                        Button { model.clearSearch() } label: { Image(systemName:"xmark.circle.fill") }.buttonStyle(.plain).accessibilityLabel("Clear search")
                     }
                     }.padding(.horizontal,10).padding(.vertical,8)
                         .background(Color(nsColor:wideHeader ? StillBrand.canvas : StillBrand.pane),in:RoundedRectangle(cornerRadius:6))
                         .overlay(RoundedRectangle(cornerRadius:6).stroke(searchFocused ? Color(nsColor:StillBrand.accent) : Color.primary.opacity(0.12),lineWidth:1))
                 }
-                Button { filtersVisible.toggle() } label: { Label("Filters",systemImage:"line.3.horizontal.decrease") }
+                Button { reveal { filtersVisible.toggle() } } label: { Label("Filters",systemImage:"line.3.horizontal.decrease") }
                     .help("Expand photo filters").accessibilityValue(filtersVisible ? "Expanded" : model.hasFilters || model.recipe.palette != nil ? "Active filters" : "Collapsed")
                 HStack(spacing:4) {
                     Button { model.zoomGrid(-1) } label: { Image(systemName:"minus.magnifyingglass") }
@@ -214,6 +222,14 @@ HStack(spacing:8) {
     private var recipeBar: some View {
         VStack(alignment:.leading,spacing:8) {
             if !wideHeader { searchControls }
+            if model.recipe.referenceAssetID != nil {
+                HStack(spacing:12) {
+                    Button { model.selectAll() } label: { Label("Back to all photos",systemImage:"chevron.left") }
+                        .controlSize(.small)
+                    Text("Matching the selected photo").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Spacer(minLength:0)
+                }
+            }
             if model.recipe.palette != nil && model.paletteCoverage.prepared < model.paletteCoverage.total {
                 HStack {
                     Text("Palette analyzed: \(model.paletteCoverage.prepared) / \(model.paletteCoverage.total) files").font(.caption).foregroundStyle(.secondary)
@@ -321,7 +337,7 @@ HStack(spacing:8) {
     }
     private var filterControls: some View {
         VStack(alignment:.leading,spacing:16) {
-            HStack { Text("Filter photos").font(.headline); Spacer(); Button("Done") { filtersVisible = false } }
+            HStack { Text("Filter photos").font(.headline); Spacer(); Button("Done") { reveal { filtersVisible = false } } }
             if model.searchMode == "visual" {
                 VStack(alignment:.leading,spacing:6) {
                     HStack {
@@ -487,8 +503,8 @@ HStack(spacing:8) {
                         .foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                 }
                 Divider()
-                VStack(alignment:.leading,spacing:12) {
-                    Text("View recipe").font(.subheadline.weight(.semibold))
+                DisclosureGroup("View settings") {
+                    VStack(alignment:.leading,spacing:8) {
                     LabeledContent("Sources",value:model.recipe.sourceIDs.isEmpty ? "All sources" : "Selected sources")
                     LabeledContent("Group by",value:model.recipe.grouping.title)
                     LabeledContent("Sort",value:model.resultOrderingTitle)
@@ -496,8 +512,9 @@ HStack(spacing:8) {
                         Text(model.hasUnsavedChanges ? "Changes haven’t been saved." : "Saved view settings")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                }
-            }.padding(Workbench.contentInset)
+                    }.font(.caption).padding(.top,8)
+                }.font(.subheadline)
+            }.padding(16)
         }
         .background(Color(nsColor:StillBrand.pane))
     }
@@ -553,55 +570,9 @@ HStack(spacing:8) {
         }
     }
     private func photoDetails(_ asset: IndexedAsset) -> some View {
-        VStack(alignment:.leading,spacing:12) {
-            Text(asset.filename).font(.body.weight(.medium)).textSelection(.enabled)
-            CachedPhoto(path:asset.thumbnailPath,revision:String(asset.asset.modifiedAt?.timeIntervalSince1970 ?? 0)).frame(height:128)
-            if model.selectedPairMembers.count == 2 {
-                Text("RAW + JPEG").font(.subheadline.weight(.semibold))
-                ForEach(model.selectedPairMembers) { member in
-                    Button { model.selectAsset(member.id) } label: {
-                        HStack { Text(member.filename).lineLimit(1); Spacer(); Text(model.originalAvailable(member) ? "Available" : "Offline").font(.caption).foregroundStyle(.secondary); if member.id == asset.id { Image(systemName:"checkmark") } }
-                    }.help("Inspect this member’s metadata, tags and original")
-                }
-                Text("Metadata, tags, favorites and collection membership belong to the selected file.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-                Button("Separate Pair") { model.separateSelectedPair() }
-            }
-            Button("Open Preview") { model.previewPresented = true }
-            Button { model.toggleFavorite() } label: { Label(model.selectedFavorite ? "Remove Favorite" : "Favorite",systemImage:model.selectedFavorite ? "heart.fill" : "heart") }
-            Menu("Collections") {
-                if model.collections.isEmpty { Text("Create a collection in the sidebar") }
-                ForEach(model.collections) { collection in
-                    Button { model.toggleCollection(collection) } label: { if model.selectedCollections.contains(collection.id) { Label(collection.name,systemImage:"checkmark") } else { Text(collection.name) } }
-                }
-            }
-            Button("Find Similar") { model.findSimilar() }
-                .disabled(model.visualCoverage.embedded == 0)
-            Button("Reveal Original in Finder") { model.revealPhoto() }
-            PhotoTags(model:model)
-            Divider()
-            LabeledContent("Original",value:model.originalAvailable(asset) ? "Available" : model.availability[asset.asset.sourceID] == "Connected" ? "Missing or unreadable" : "Drive disconnected or access needed")
-            if let metadata = asset.metadata {
-                LabeledContent("Camera",value:metadata.camera ?? "Unknown")
-                LabeledContent("Captured",value:metadata.captureDateText ?? "Unknown")
-                if metadata.captureDateText != nil && metadata.captureTimezone == nil { Text("Camera timezone not recorded").font(.caption).foregroundStyle(.secondary) }
-                LabeledContent("Lens",value:metadata.lens ?? "Unknown")
-                LabeledContent("ISO",value:metadata.iso.map { String(Int($0)) } ?? "Unknown")
-                LabeledContent("Aperture",value:metadata.aperture.map { "f/\($0.formatted())" } ?? "Unknown")
-                LabeledContent("Exposure",value:metadata.exposureDescription ?? "Unknown")
-                LabeledContent("Size",value:metadata.width.flatMap { width in metadata.height.map { "\(width) × \($0)" } } ?? "Unknown")
-                LabeledContent("Format",value:metadata.format ?? "Unknown")
-            }
-            if let error = asset.error {
-                Label("Preview failed",systemImage:"exclamationmark.triangle").font(.subheadline.weight(.semibold))
-                Text(error).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
-                Button("Retry Preview") { model.retrySelectedPreview() }.disabled(model.indexing || !model.originalAvailable(asset))
-            } else if asset.thumbnailPath == nil && asset.previewState == .complete {
-                Text("The preview cache was cleared to stay within its limit. Metadata and the original are preserved.").font(.caption).foregroundStyle(.secondary)
-                Button("Rebuild Preview") { model.retrySelectedPreview() }.disabled(model.indexing || !model.originalAvailable(asset))
-            } else if let source = asset.previewSource { Text("\(source) · sRGB").font(.caption).foregroundStyle(.secondary) }
-            Text(asset.asset.relativePath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-        }
+        PhotoInspector(model:model,asset:asset).id(asset.id)
     }
+
 }
 private struct SaveLiveViewSheet: View {
     @ObservedObject var model: WorkspaceModel
@@ -641,7 +612,7 @@ private struct CreateCollectionSheet: View {
         }.padding(24).frame(width:400)
     }
 }
-private struct PhotoTags: View {
+struct PhotoTags: View {
     @ObservedObject var model: WorkspaceModel
     @State private var draft = ""
     @State private var replacing: UUID?

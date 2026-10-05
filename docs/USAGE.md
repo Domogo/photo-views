@@ -28,6 +28,7 @@ Requires Apple Silicon macOS and the Swift command-line tools. The package decla
 ```sh
 swift run CatalogChecks
 swift run IndexChecks
+python3 scripts/check_workspace.py
 python3 scripts/build_app.py --open
 ```
 
@@ -39,7 +40,7 @@ The catalog is stored in `~/Library/Application Support/Photo Views/catalog.sqli
 
 ## Search on this Mac
 
-Type a description such as “cars at night” in **Describe a photo…**. Use Command-F to focus search. **View → Search → Filename or keyword** searches filenames, folder paths or tags, including unconfirmed suggestions. **Filters** expands camera, folder and inclusive capture-date constraints; the applied constraints remain visible after closing it. **View** contains grouping, sorting and saved-view actions. Select a photo and choose **Find Similar**; **Exit Similar** returns to browsing while retaining filters.
+Type a description such as “cars at night” in **Find a moment…**. Use Command-F to focus search. **View → Search → Filename or keyword** searches filenames, folder paths or tags, including unconfirmed suggestions. **Filters** expands camera, folder and inclusive capture-date constraints; the applied constraints remain visible after closing it. **View** contains grouping, sorting and saved-view actions. Select a photo and choose **Find Similar**. The clear button beside **Similar photos** removes only the reference search and keeps the current filters; **Back to all photos** clears search, source/person/collection scope and exact/palette constraints. All photos in the top header has the same reset behavior. Changing or clearing search returns the gallery to the top.
 
 The small result/indexing status disclosure shows which photos have visual embeddings and exposes separate preview/visual indexing controls. Visual searches return candidates meeting the adjustable similarity cutoff, with incremental loading; scores are not guarantees or confidence percentages. Exact filters are never broadened. Filename search also works for indexed photos without visual embeddings.
 
@@ -69,7 +70,7 @@ M7 implementation and measured limits: [M7_STATUS.md](history/M7_STATUS.md).
 
 ## Image-first gallery and dominant colors
 
-Navigation and the inspector start hidden; the toolbar exposes them, and selecting a photo opens Details. The gallery uses lazy flowing columns, full image proportions and narrow gutters. Filenames and metadata remain in Details. Filters expands only when requested; active exact constraints are individually removable.
+The folder pane and inspector start hidden; the header exposes them, and selecting a photo opens Details. The gallery uses recycled masonry cells, full image proportions and narrow gutters. Hovering a photo reveals a subtle outline and Favorite/editor shortcuts; the selected photo also exposes these actions for keyboard and accessibility use. Filenames remain in Details. Favorite, Preview and installed editors appear first; RAW + JPEG, Metadata and View settings are collapsed initially. Metadata uses smaller text. Filters expands only when requested; active exact constraints are individually removable.
 
 Use **Filters → Overall palette** to select a named color and its minimum image area, or type `mostly blue` / `predominantly blue` and press Return. A family must be the image’s largest color family and meet the area threshold (default 25%). `Blue car` remains a visual description. Color constraints combine with descriptions and exact filters; saved views persist them.
 
@@ -77,9 +78,9 @@ Palette analysis uses existing sRGB previews in bounded local batches. It needs 
 
 Revision evidence and remaining native handoff: [CANVAS_STATUS.md](history/CANVAS_STATUS.md).
 
-Ranked search now keeps candidates meeting Minimum match score in Filters (text default 0.20, reference-image default 0.75), then loads 500 more as you approach the gallery end. The status shows loaded versus total qualifying logical photos. Scores are cosine similarity, not probabilities; defaults are provisional, not calibrated relevance guarantees. Palette-only search uses palette coverage instead. Saved recipes retain an explicit score threshold.
+Ranked search now keeps candidates meeting Minimum match score in Filters (text default 0.20, reference-image default 0.75), then loads 500 more as you approach the gallery end. A bottom spinner labels this as **Loading more photos…**; a failed page leaves existing images visible with a Retry action. The status shows loaded versus total qualifying logical photos. Scores are cosine similarity, not probabilities; defaults are provisional, not calibrated relevance guarantees. Palette-only search uses palette coverage instead. Saved recipes retain an explicit score threshold.
 
-Right-click a photo to open its selected original in Photomator, Lightroom or Lightroom Classic. Only installed editors under Applications are listed; shortcuts are disabled when the original is unavailable. RAW+JPEG member selection is respected. Photo Views does not edit or copy the original as part of launching the editor.
+Use a photo’s hover shortcut, Details or right-click menu to open its original in Photomator, Lightroom or Lightroom Classic. Installed apps are discovered through Launch Services and the system/user Applications folders at app launch; restart Still after installing a new editor. If multiple editors are installed, the hover shortcut opens a menu. Original-file actions are disabled when the original is unavailable. Hover favorites act on that tile’s file; Details actions follow the selected RAW/JPEG member. Still does not edit or copy an original as part of launching the editor.
 
 Visual and reference searches keep near-identical shots adjacent by default (View · Similar shots), while explicit month/camera/subject grouping remains available. Anchor-based grouping requires image cosine similarity ≥ 0.92 and a 64-bit preview difference-hash distance ≤ 20; low-contrast previews (grayscale standard deviation < 5) and missing hashes are excluded. These are provisional heuristics, not calibrated duplicate probabilities. Every photo remains individually selectable at its full proportions, groups receive no headings, and pagination extends a boundary to include the entire group. Native verification found DSC06059.ARW and DSC06060.ARW together and placed the two poster shots side by side. Background indexing refreshes avoid cancelling a pending query.
 
@@ -87,7 +88,7 @@ Grid zoom: compact minus/plus magnifier buttons beside View and View-menu comman
 
 ## People (local face groups)
 
-Open People in the sidebar to scan cached previews and browse anonymous face avatars. Selecting an avatar opens the matching photo grid. First entry starts scanning; Pause stops after the current small batch, and Scan New Photos resumes pending previews. Counts and photos are partial until the scan finishes. Right-click an avatar to merge two groups; right-click a photo inside a person’s gallery and choose Not This Person to exclude it. Restore Excluded Photos reverses that person’s exclusions. Matching can miss small/profile/occluded faces and can split or confuse identities; groups are suggestions, not verified names.
+Open People in the top header to scan cached previews and browse anonymous face avatars. Selecting an avatar opens the matching photo grid; **Back to People** returns to the avatars. First entry starts scanning; Pause stops after the current small batch, and Scan New Photos resumes pending previews. Counts and photos are partial until the scan finishes. Right-click an avatar to merge two groups; right-click a photo inside a person’s gallery and choose Not This Person to exclude it. Restore Excluded Photos reverses that person’s exclusions. Matching can miss small/profile/occluded faces and can split or confuse identities; groups are suggestions, not verified names.
 
 Run `python3 scripts/search/setup_people.py` once to install `opencv-python-headless==4.11.0.86` and download checksum-verified YuNet/SFace weights from OpenCV Zoo revision `47534e27c9851bb1128ccc0102f1145e27f23f98`. The pinned YuNet model-directory license is MIT; SFace is Apache 2.0. Setup downloads only software/models; the app performs no network face inference. Weights and cropped avatars live under `~/Library/Caches/PhotoViews/m0/people`, outside Git. SQLite stores anonymous person IDs, face vectors, per-preview fingerprints and exclusions in additive people/faces/face_scans/person_aliases/person_exclusions tables. Originals remain untouched. Rebuilding the cache can change suggested groups; naming, identity-aware natural-language search, and a comprehensive split/recluster workflow remain follow-up work.
 
@@ -100,5 +101,9 @@ People matching refinement (2026-10-03): new faces use group averages plus membe
 ## Workspace navigation
 
 All photos, Favorites and People live in the top header (⌘1, ⌘2, ⌘3). The folder icon opens folders, saved views and collections. ⌘F focuses search; Filters expands exact controls. View includes Graphite, Light and System appearance. ⌘+ / ⌘− resize gallery photos and ⌘0 resets the grid. Selecting a photo opens details; the inspector icon closes them.
+
+Returning to a visited, unfiltered browse view restores a bounded first page immediately and refreshes it in the background. First entry and invalidated pages still need a local query. Up to six pages of 500 metadata records are retained; search/filter memberships are never inferred from a broader cache. Face-group corrections invalidate person pages without invalidating All photos.
+
+Filter and inspector disclosures use short ease-out transitions, and gallery quick actions fade in. Reduce Motion removes these transitions. Gallery images have no entrance animation.
 
 Still keeps the existing Photo Views catalog, cache and environment-variable names. Renaming the app does not create a new library or copy originals.
