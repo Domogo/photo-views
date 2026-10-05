@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 @main struct PhotoViewsApp: App {
+    @NSApplicationDelegateAdaptor(StillApplicationDelegate.self) private var appDelegate
     @StateObject private var model = WorkspaceModel()
     var body: some Scene {
         WindowGroup("Still") {
@@ -27,5 +28,16 @@ import AppKit
                     .disabled(!model.isReady)
             }
         }
+    }
+}
+
+final class StillApplicationDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Developer builds keep the same bundle identity. Refresh the running Dock
+        // image from this bundle rather than inheriting Launch Services' old icon.
+        guard let name = Bundle.main.object(forInfoDictionaryKey:"CFBundleIconFile") as? String,
+              let url = Bundle.main.url(forResource:name,withExtension:"icns"),
+              let icon = NSImage(contentsOf:url) else { return }
+        NSApplication.shared.applicationIconImage = icon
     }
 }

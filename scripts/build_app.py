@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build a local developer .app with ad-hoc signing; no accounts, hosting, or paid services."""
 import argparse
+import hashlib
 import plistlib
 import shutil
 import subprocess
@@ -23,10 +24,12 @@ shutil.copy2(root / 'scripts/search/worker.py',contents / 'Resources/search_work
 shutil.copy2(root / 'scripts/search/people.py',contents / 'Resources/people.py')
 shutil.copy2(root / 'scripts/search/palette.py',contents / 'Resources/palette.py')
 shutil.copy2(root / 'scripts/search/tag_vocabulary.json',contents / 'Resources/tag_vocabulary.json')
-shutil.copy2(root / 'Resources/Brand/Still.icns',contents / 'Resources/Still.icns')
+icon_source = root / 'Resources/Brand/Still.icns'
+icon_name = 'Still-' + hashlib.sha256(icon_source.read_bytes()).hexdigest()[:12]
+shutil.copy2(icon_source,contents / 'Resources' / (icon_name + '.icns'))
 info = {'CFBundleName':'Still','CFBundleDisplayName':'Still',
         'CFBundleIdentifier':'com.domogo.photoviews','CFBundleExecutable':'PhotoViews',
-        'CFBundleIconFile':'Still','CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.1.0','CFBundleVersion':'1',
+        'CFBundleIconFile':icon_name,'CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.1.0','CFBundleVersion':'2',
         'LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True}
 (contents / 'Info.plist').write_bytes(plistlib.dumps(info))
 subprocess.run(['codesign','--force','--sign','-',str(app)],check=True)

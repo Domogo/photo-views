@@ -97,11 +97,11 @@
       }
     },
     "verification": {
-      "revision": "Still interaction refinement — 2026-10-05",
-      "disposition": "ship for three scored fixes only: Collections contrast, browse snapshot invalidation and resuming canceled browse queries; not full-surface acceptance",
-      "sourceCompilation": "Latest release build passed",
-      "renderedReview": "Current wide native inspector/metadata/similar/person/filter captures validated; corrected Collections label/chevron readable in Light/Graphite including Light → Graphite, with no visible regression at the three scored fixes.",
-      "historicalEvidence": "Earlier canvas, People and Still View/titlebar/heading reviews remain historical; no inherited full-surface acceptance.",
+      "revision": "Still icon hardening and editor handoff evidence — 2026-10-05",
+      "disposition": "ship for icon hardening only; packaging and runtime icon installation resolved in implementation; actual Dock appearance unverified; direct Photomator opening unresolved; not full-surface acceptance",
+      "sourceCompilation": "Final local release build and code-signature verification passed; app launched.",
+      "renderedReview": "Approved icon asset raster and native wide header/gallery captures opened and validated. Fresh reviewer found no material icon code or geometry issue and returned ship for icon hardening only. The user screenshot of the old outlined S superseded the prior icon ship claim; actual Dock appearance remains unverified.",
+      "historicalEvidence": "Prior interaction review returned ship for three scored fixes only: Collections contrast in Light/Graphite including Light → Graphite, browse snapshot invalidation and canceled-browse resumption, with no visible regression at that scope. Earlier canvas, People and Still View/titlebar/heading reviews remain historical; no inherited full-surface acceptance.",
       "followUpVerification": [
         "Current compact/780pt layout capture",
         "Full accessibility and high contrast",
@@ -110,10 +110,29 @@
         "Transient pagination spinner/failure capture",
         "System appearance transitions",
         "Actual window dragging",
-        "Photomator opening the selected original: launched, but editor CUA timed out before selected-file confirmation; Lightroom absent"
+        "Direct Photomator opening remains unresolved: correct original paths and successful macOS requests still leave its photo browser visible; Finder Open With entry is registered but entering editing through Finder is unverified; Lightroom absent/unverified",
+        "Actual running Dock icon appearance"
       ],
-      "localChecks": "Release build, CatalogChecks and scripts/check_workspace.py passed; workspace checks cover bounded snapshot keys/invalidation and navigation including canceled-browse resumption.",
+      "localChecks": "Final local release build, code-signature verification, CatalogChecks and scripts/check_workspace.py passed; app launched. Workspace checks cover bounded snapshot keys/invalidation and navigation including canceled-browse resumption.",
       "captures": [
+        ".impeccable/review/icon-refresh.png",
+        ".impeccable/review/icon-refresh-workspace.png"
+      ],
+      "verifiedInteraction": [
+        "Native AX Favorite toggle and revert",
+        "Installed editor presence; correct RAW/JPEG original paths and successful macOS opening requests, without direct Photomator editor entry",
+        "Metadata disclosure behavior",
+        "Selected person: 80 photos; Back to People returns to avatars; All photos: 13,181 logical photos",
+        "Collections AX click opens the native menu",
+        "Manual double-click in Photomator’s own browser opened the paired JPEG; AX document URL verified; no edits or saves made"
+      ],
+      "catalogContinuity": {
+        "historicalFiles": 19877,
+        "historicalSavedViews": 2,
+        "currentAllLogicalPhotos": 13181
+      },
+      "evidenceLimits": "Latest evidence is an icon asset raster and a native wide workspace capture; neither verifies the running Dock icon or direct editor handoff. Eight prior interaction captures remain bounded historical evidence. Captures stay local/excluded from Git. No current compact, pointer-only hover, measured motion/Reduce Motion timing or transient pagination evidence. Imagegen concepts are not native QA; web build-phase remains spec with unsuitable font/raster gates.",
+      "priorInteractionCaptures": [
         ".impeccable/review/interactions-inspector-dark.png",
         ".impeccable/review/interactions-inspector-light.png",
         ".impeccable/review/interactions-metadata-dark.png",
@@ -123,19 +142,21 @@
         ".impeccable/review/interactions-collections-fixed-light.png",
         ".impeccable/review/interactions-collections-fixed-dark.png"
       ],
-      "verifiedInteraction": [
-        "Native AX Favorite toggle and revert",
-        "Installed editor presence; Photomator launch only",
-        "Metadata disclosure behavior",
-        "Selected person: 80 photos; Back to People returns to avatars; All photos: 13,181 logical photos",
-        "Collections AX click opens the native menu"
-      ],
-      "catalogContinuity": {
-        "historicalFiles": 19877,
-        "historicalSavedViews": 2,
-        "currentAllLogicalPhotos": 13181
+      "iconHardening": {
+        "reviewDisposition": "ship for icon hardening only",
+        "packaging": "Resolved in implementation: content-derived resource name and bundle version 2; packaged bytes match Resources/Brand/Still.icns.",
+        "runtimeInstallation": "Resolved in implementation: app delegate assigns the exact bundle icon resource to NSApplication.applicationIconImage.",
+        "dockAppearance": "Partial evidence; no direct Dock capture."
       },
-      "evidenceLimits": "Eight captures are wide and remain local/excluded from Git; no compact, pointer-only hover, measured motion/Reduce Motion timing or transient pagination evidence. Imagegen concepts are not native QA; web build-phase remains spec with unsuitable font/raster gates."
+      "editorHandoff": {
+        "status": "Direct Photomator opening unresolved",
+        "request": "WorkspaceModel rebuilds an explicit plain file URL for the selected original and uses the public NSWorkspace open-URLs API with promptsUserIfNeeded enabled.",
+        "observed": "Correct RAW/JPEG original paths and successful macOS opening requests verified; Photomator continues to show its photo browser.",
+        "manualPhotomator": "Double-click in Photomator’s own browser opened the paired JPEG; AX document URL verified; no edits or saves made.",
+        "finder": "User screenshot confirms an Open With Photomator option only; entering the editor through Finder remains unverified.",
+        "lightroom": "Absent and unverified",
+        "cause": "Not established; request acceptance does not prove editor entry."
+      }
     },
     "paletteSearch": {
       "version": "srgb-hsv-area-v1",
@@ -202,7 +223,18 @@
         ],
         "gapPt": 9
       },
-      "continuity": "Still.app; bundle/data/cache identities retained"
+      "continuity": "Still.app; bundle/data/cache identities retained",
+      "applicationIcon": {
+        "source": "Resources/Brand/Still.icns",
+        "assetSha256": "dcbef2ca25bb5798b480bdc6fa52c595638c7cc86ee0bc91295233beaf779b91",
+        "packagedResourceName": "Still-dcbef2ca25bb.icns",
+        "bundleIconFile": "Still-dcbef2ca25bb",
+        "bundleVersion": "2",
+        "bundleIdentifier": "com.domogo.photoviews",
+        "implementation": "Build packages the unchanged approved asset with a content-derived name; StillApplicationDelegate loads the exact CFBundleIconFile resource into NSApplication.applicationIconImage at launch.",
+        "geometry": "Approved filled opposing 90-degree corners and Graphite/warm-white asset unchanged.",
+        "dockAppearance": "Unverified; asset raster and native wide workspace capture do not show the running Dock icon."
+      }
     },
     "nativeMenu": {
       "implementation": "Borderless native Menu, hidden default indicator; explicit primary label and 8pt semibold chevron",

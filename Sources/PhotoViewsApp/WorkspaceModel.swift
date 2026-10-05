@@ -560,8 +560,11 @@ import PhotoViewsCore
             errorMessage = "Reconnect the source drive or restore access to open this original."
             return
         }
+        // Hand off a concrete file URL rather than the catalog's scoped folder URL.
+        let original = URL(fileURLWithPath:root.appendingPathComponent(asset.asset.relativePath,isDirectory:false).path,isDirectory:false)
         let configuration = NSWorkspace.OpenConfiguration()
-        NSWorkspace.shared.open([root.appendingPathComponent(asset.asset.relativePath)],withApplicationAt:application,configuration:configuration) { [weak self] _,error in
+        configuration.promptsUserIfNeeded = true
+        NSWorkspace.shared.open([original],withApplicationAt:application,configuration:configuration) { [weak self] _,error in
             if let error { DispatchQueue.main.async { self?.errorMessage = "Could not open the original: " + error.localizedDescription } }
         }
     }
