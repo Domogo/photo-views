@@ -14,7 +14,7 @@ root = Path(__file__).resolve().parents[1]
 configuration = 'release' if args.release else 'debug'
 subprocess.run(['swift','build','-c',configuration],cwd=root,check=True)
 binary_dir = Path(subprocess.check_output(['swift','build','-c',configuration,'--show-bin-path'],cwd=root,text=True).strip())
-app = root / '.build' / 'app' / 'Photo Views.app'
+app = root / '.build' / 'app' / 'Still.app'
 contents = app / 'Contents'
 (contents / 'MacOS').mkdir(parents=True,exist_ok=True)
 shutil.copy2(binary_dir / 'PhotoViews',contents / 'MacOS' / 'PhotoViews')
@@ -23,9 +23,10 @@ shutil.copy2(root / 'scripts/search/worker.py',contents / 'Resources/search_work
 shutil.copy2(root / 'scripts/search/people.py',contents / 'Resources/people.py')
 shutil.copy2(root / 'scripts/search/palette.py',contents / 'Resources/palette.py')
 shutil.copy2(root / 'scripts/search/tag_vocabulary.json',contents / 'Resources/tag_vocabulary.json')
-info = {'CFBundleName':'Photo Views','CFBundleDisplayName':'Photo Views',
+shutil.copy2(root / 'Resources/Brand/Still.icns',contents / 'Resources/Still.icns')
+info = {'CFBundleName':'Still','CFBundleDisplayName':'Still',
         'CFBundleIdentifier':'com.domogo.photoviews','CFBundleExecutable':'PhotoViews',
-        'CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.1.0','CFBundleVersion':'1',
+        'CFBundleIconFile':'Still','CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.1.0','CFBundleVersion':'1',
         'LSMinimumSystemVersion':'14.0','NSHighResolutionCapable':True}
 (contents / 'Info.plist').write_bytes(plistlib.dumps(info))
 subprocess.run(['codesign','--force','--sign','-',str(app)],check=True)

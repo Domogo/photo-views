@@ -1,14 +1,16 @@
-# Photo Views
+# Still
 
 **Describe what you remember. Filter what you know. Group the results however you want.**
 
-Photo Views is a native macOS app for searching and organizing photos in existing folders and external drives. It combines local visual search with explicit metadata filters, live saved views, similar-photo search, dominant-color search and anonymous People groups. Originals stay in place and unchanged.
+Still is a native macOS app for searching and organizing photos in existing folders and external drives. It combines local visual search with explicit metadata filters, live saved views, similar-photo search, dominant-color search and anonymous People groups. Originals stay in place and unchanged.
 
 **Status:** research/hackathon prototype and local developer build. Python dependencies and pretrained weights are installed separately; this is not a notarized, standalone download. Broad accuracy and production model suitability remain unverified.
 
-![Photo Views native gallery displaying generated demonstration artwork](docs/images/gallery.png)
+![Earlier Photo Views interface displaying generated demonstration artwork](docs/images/gallery.png)
 
-The public screenshots use original generated artwork, with no private photos or faces. They show the actual native app; the synthetic images are not retrieval-quality evidence.
+Still was previously named Photo Views. The bundle identifier, catalog/cache locations and `PHOTO_VIEWS_*` environment variables retain their existing names so existing libraries continue to work.
+
+The public screenshots show the earlier interface and use original generated artwork, with no private photos or faces. They show the actual native app; the synthetic images are not retrieval-quality evidence.
 
 ## Features
 
@@ -72,7 +74,7 @@ For a custom root, launch the executable directly so it inherits the environment
 PHOTO_VIEWS_PYTHON="$HOME/Library/Caches/PhotoViews/custom/venv/bin/python" \
 PHOTO_VIEWS_MODEL="$HOME/Library/Caches/PhotoViews/custom/model" \
 PHOTO_VIEWS_DATA_DIR="$HOME/Library/Application Support/Photo Views Demo" \
-".build/app/Photo Views.app/Contents/MacOS/PhotoViews"
+".build/app/Still.app/Contents/MacOS/PhotoViews"
 ```
 
 The data override isolates the catalog and preview cache; People avatars/models derive from the model directory's parent. `open`/Finder launching may not inherit custom shell variables. Default-path setup needs no overrides.

@@ -31,7 +31,7 @@ swift run IndexChecks
 python3 scripts/build_app.py --open
 ```
 
-Use `--release` for an optimized build. The script creates an ad-hoc signed developer app in `.build/app/Photo Views.app`. No GitHub builds or hosting are involved.
+Use `--release` for an optimized build. The script creates an ad-hoc signed developer app in `.build/app/Still.app`. No GitHub builds or hosting are involved.
 
 The catalog is stored in `~/Library/Application Support/Photo Views/catalog.sqlite`. `PHOTO_VIEWS_DATA_DIR` overrides its directory for isolated local checks. Previews are stored in `~/Library/Caches/PhotoViews/previews` with a 2 GiB disk budget; an isolated data-directory override also isolates its preview cache. Sources stay in their existing folders. App builds, catalogs, photos, previews, model weights, and probe output are excluded from Git.
 
@@ -96,3 +96,9 @@ Detection uses cached previews, YuNet score ≥ 0.9 and faces ≥ 32 pixels. SFa
 People verification: 22 local worker checks pass, including persisted merged-ID redirects and exclusions surviving face-order changes on reindex; native wide and compact light browser, selected-person gallery, merge chooser/cancel, pause, and exclusion/restore (11 → 10 → 11 photos) were checked. Dark/high contrast, comprehensive accessibility, executed user merges and broad recognition accuracy remain unmeasured.
 
 People matching refinement (2026-10-03): new faces use group averages plus member support at 0.50 and a 0.04 margin between competing groups. Refine Groups consolidates existing groups with centroid similarity ≥ 0.65 plus ≥ 0.60 cross-matches supported by at least two logical photos on each side. Single-photo groups require ≥ 0.85 centroid similarity. Complete-link checks prevent transitive consolidation; shared-image detections and explicit exclusions block automatic merges. RAW/JPEG pairs count once as evidence. These provisional settings reduce fragmentation, without constituting a measured identity-accuracy improvement. The user-confirmed screenshot pair was explicitly merged; ambiguous splits can still need manual correction.
+
+## Workspace navigation
+
+All photos, Favorites and People live in the top header (⌘1, ⌘2, ⌘3). The folder icon opens folders, saved views and collections. ⌘F focuses search; Filters expands exact controls. View includes Graphite, Light and System appearance. ⌘+ / ⌘− resize gallery photos and ⌘0 resets the grid. Selecting a photo opens details; the inspector icon closes them.
+
+Still keeps the existing Photo Views catalog, cache and environment-variable names. Renaming the app does not create a new library or copy originals.

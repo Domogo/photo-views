@@ -1,10 +1,20 @@
-# Photo Views — Implementation Milestones
+# Still — Implementation Milestones
 
 Status: implementation backlog, 2026-10-02. M0–M7 implementation and bounded evidence are tracked in their status documents; M8 verification/demo handoff remains pending. Drive reconnection and RAW+JPEG integrity are tracked in [M7_STATUS.md](docs/history/M7_STATUS.md). M6’s six approved examples pass; broader held-out plan agreement remains M8; see [M6_STATUS.md](docs/history/M6_STATUS.md).
 
-Authority: [prd.md](prd.md) for requirements, [PRODUCT.md](PRODUCT.md) for durable context, [DESIGN.md](DESIGN.md) for the selected Photo Workbench direction, and [.impeccable/surfaces/main-workspace.md](.impeccable/surfaces/main-workspace.md) for workspace behavior.
+Authority: [prd.md](prd.md) for requirements, [PRODUCT.md](PRODUCT.md) for durable context, [DESIGN.md](DESIGN.md) for the selected Still direction (Atelier navigation in Graphite), and [.impeccable/surfaces/main-workspace.md](.impeccable/surfaces/main-workspace.md) for workspace behavior. Original milestone references to Photo Workbench describe the earlier implementation.
 
 Milestones describe working increments, not calendar commitments. Hackathon duration, team, hardware, and fixtures remain unknown; the PRD's two-to-three-day assumption is not an estimate for this whole backlog. Checks run locally; no custom GitHub Actions or paid automation is introduced.
+
+## Still rebrand — 2026-10-05
+
+The user approved Graphite color, Atelier top navigation, the filled Open Frame mark and a sharp wordmark. Implementation follows three steps:
+
+1. **Identity and surfaces:** reusable appearance colors, exact vector mark/wordmark and native app icon; rename the visible app while retaining catalog and bundle identity.
+2. **Workspace:** unified top navigation and natural-language search, compact-window search row, on-demand folders/filters/details, image-only masonry and preserved keyboard commands.
+3. **Verification and delivery:** local release build, catalog checks, native Dark/Light captures and independent review; record coverage limits, update design authority and push verified code to main.
+
+The first two steps are implemented. Local release and CatalogChecks pass; final native review is recorded in the workspace brief. Compact-window automation remains unavailable, so the 780pt layout and comprehensive accessibility still require native verification.
 
 ## M0 — Resolve feasibility and demo scope
 

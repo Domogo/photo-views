@@ -1,4 +1,4 @@
-# Photo Views
+# Still
 
 <!-- impeccable:product-schema 1 -->
 
@@ -51,7 +51,11 @@ Primary workflow: select folders → browse while indexing → search and filter
 
 ## Brand Commitments
 
-Working name: Photo Views. Native macOS behavior, optional source/details panes, standard folder picker, keyboard navigation and Space for larger preview are binding UX requirements. The user revised Photo Workbench on 2026-10-02 toward a quiet photo canvas: full-proportion flowing gallery, compact natural-language search, filters expanded on demand, and contextual details. Their first reference sets image density and restraint; their second supplies useful contextual information. Preserve neutral system appearances and native controls. DESIGN.md records implemented tokens and components; the main-workspace brief carries this approved composition.
+Approved name: **Still**. The user selected Graphite color with Atelier top navigation and the Open Frame mark, then authorized implementation. The identity is quiet, photographic, understated, minimal, modern and bespoke. The mark comprises two filled opposing right-angle corners; the lowercase wordmark uses sharp custom geometry. Native macOS behavior, local processing, read-only originals, standard folder selection, keyboard navigation and Space preview remain binding.
+
+Graphite is the default appearance; Light and System remain available in View. All photos, Favorites and People live in the top navigation; folders, saved views and collections appear on demand. Photographs retain full proportions in an image-only flowing gallery; filters and contextual details expand when useful. Functional text remains native system typography. DESIGN.md owns the implemented visual system; the main-workspace brief owns composition and state behavior. Fresh wide native review resolved the titlebar and heading fixes and returned ship for the scored View contrast fix only. Compact layout, full accessibility and System transitions remain unverified; earlier canvas approval is historical evidence only.
+
+The displayed application and build artifact are Still / `.build/app/Still.app`. Preserve bundle identifier `com.domogo.photoviews` and existing Photo Views catalog/cache locations for continuity; the rename must not create an empty replacement catalog.
 
 ## Evidence on Hand
 
@@ -73,4 +77,4 @@ Preserve keyboard navigation and selection where possible, as required by the PR
 
 Hackathon timing/team; camera models and RAW variants/fixtures; demo hardware and collection size; minimum macOS; exact model/tokenizer/backend/license review; optional hosted-call policy/budget; required languages (English evaluation is the PRD's starting proposal); face scope; and distribution target.
 
-People extension (2026-10-03): the user requested anonymous identity browsing. A sidebar People destination displays cropped face avatars; selecting one opens all currently detected matches in the existing photo grid. Local YuNet/SFace indexing runs on cached previews, with progressive coverage, pause/resume, merge and per-photo exclusion/restore. No identity names are inferred. Detection and clustering are provisional and may miss faces or confuse/split people. Naming and identity-aware natural-language clauses are not shipped.
+People extension (2026-10-03): the user requested anonymous identity browsing. The top-navigation People destination displays cropped face avatars; selecting one opens all currently detected matches in the existing photo grid. Local YuNet/SFace indexing runs on cached previews, with progressive coverage, pause/resume, merge and per-photo exclusion/restore. No identity names are inferred. Detection and clustering are provisional and may miss faces or confuse/split people. Naming and identity-aware natural-language clauses are not shipped.

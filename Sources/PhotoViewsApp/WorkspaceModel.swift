@@ -41,6 +41,7 @@ import PhotoViewsCore
     @Published var assetLimit = 500
     var searchMode: String { get { recipe.searchMode ?? "visual" } set { recipe.searchMode = newValue } }
     @Published var searching = false
+    @Published var searchFocusRequest = 0
     @Published var searchError: String?
     @Published var resultCount = 0
     @Published var cameras: [String] = []
@@ -180,7 +181,7 @@ import PhotoViewsCore
     func chooseFolder(reauthorizing source: CatalogSource? = nil) {
         let panel = NSOpenPanel()
         panel.title = source == nil ? "Add a photo folder" : "Restore folder access"
-        panel.message = "Photos stay in their existing folders. Photo Views stores its catalog on this Mac."
+        panel.message = "Photos stay in their existing folders. Still stores its catalog on this Mac."
         panel.canChooseFiles = false; panel.canChooseDirectories = true
         panel.allowsMultipleSelection = source == nil
         panel.prompt = source == nil ? "Add Folder" : "Restore Access"

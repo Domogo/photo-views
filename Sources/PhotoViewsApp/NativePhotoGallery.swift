@@ -31,7 +31,7 @@ private final class GalleryCell: NSCollectionViewItem {
     override var isSelected: Bool { didSet { updateSelection() } }
     private func updateSelection() {
         view.layer?.borderWidth = isSelected ? 2 : 0
-        view.layer?.borderColor = NSColor.controlAccentColor.cgColor
+        view.effectiveAppearance.performAsCurrentDrawingAppearance { view.layer?.borderColor = StillBrand.accent.cgColor }
     }
     override func prepareForReuse() { super.prepareForReuse(); operation?.cancel(); operation = nil; imageKey = ""; imageView?.image = nil }
     func configure(_ asset: IndexedAsset, available: Bool) {
@@ -118,7 +118,7 @@ struct NativePhotoGallery: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSScrollView(); scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.drawsBackground = false
         let collection = GalleryCollection(); collection.isSelectable = true; collection.allowsMultipleSelection = false
-        collection.backgroundColors = [.textBackgroundColor]; collection.collectionViewLayout = context.coordinator.layout
+        collection.backgroundColors = [StillBrand.canvas]; collection.collectionViewLayout = context.coordinator.layout
         collection.register(GalleryCell.self,forItemWithIdentifier:galleryItemID)
         collection.dataSource = context.coordinator; collection.delegate = context.coordinator
         collection.preview = { [weak model] in if model?.selectedAsset != nil { model?.previewPresented = true } }

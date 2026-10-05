@@ -4,7 +4,7 @@
 
 Read prd.md, PRODUCT.md, DESIGN.md, and IMPLEMENTATION_MILESTONES.md for scope.
 Native macOS app: SwiftUI/AppKit, local catalog and baseline inference. Preserve originals.
-The selected visual direction is Photo Workbench; main workspace brief is under .impeccable/surfaces/.
+The selected visual direction is Still: Atelier navigation in Graphite, with the filled Open Frame mark and sharp wordmark. The main workspace brief is under .impeccable/surfaces/.
 
 ## Delivery
 

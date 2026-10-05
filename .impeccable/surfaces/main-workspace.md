@@ -1,24 +1,26 @@
-# Main workspace — Quiet photo canvas
+# Main workspace — Still, Atelier in Graphite
 
-Status: revised direction approved by the user, 2026-10-02; native implementation and capture checks completed; the reviewer scored both requested corrections resolved, with ship at the fix-list scope.
-Primary target: Sources/PhotoViewsApp/WorkspaceView.swift
-Related targets: Sources/PhotoViewsApp/PhotoGrid.swift, Sources/PhotoViewsApp/NativePhotoGallery.swift, Sources/PhotoViewsCore/GalleryGeometry.swift
+Status: user approved Graphite + Atelier navigation + the selected Open Frame filled-corner mark and sharp wordmark, and authorized planning/implementation. Latest release builds and local CatalogChecks passed. Fresh native reviewer disposition is ship for the scored View contrast fix only; earlier titlebar and heading fixes are resolved. This is not full-surface acceptance.
+Primary targets: Sources/PhotoViewsApp/WorkspaceView.swift, Brand.swift, PhotoViewsApp.swift
+Related targets: PhotoGrid.swift, NativePhotoGallery.swift, Sources/PhotoViewsCore/GalleryGeometry.swift
 
 ## Scope and mode
 
-Native macOS main workspace. Operate mode with photographs leading exploration. PRODUCT.md and prd.md retain product truth; this approved revision changes presentation and adds overall-palette search. Native controls, local processing, read-only originals, saved views, exact constraints, keyboard navigation and RAW+JPEG integrity remain binding.
+Native macOS photographic workspace. PRODUCT.md and prd.md govern product truth; DESIGN.md owns extracted visual tokens. Local processing, read-only originals, saved views, exact constraints, keyboard behavior and RAW+JPEG integrity remain binding. Approved composition: `.impeccable/mocks/comp-3.png`. The selected solid opposing-corner logo overrides the older outlined mark in that composition.
 
 ## Direction contract
 
-**THESIS:** A quiet photo canvas gives photographs the available window. One natural-language input leads retrieval; supporting controls appear when useful.
+**THESIS:** A quiet photographic atelier gives the archive the window. The Graphite surround and crisp top navigation recede; photographs lead.
 
-**OWN-WORLD:** Appearance-aware neutral canvas, SF typography, compact labeled native controls, flat panes and quiet separators. The first user reference (CAP's dark flowing gallery) is the composition authority: image scale, full proportions, narrow gutters and receding controls. The second reference contributes contextual details and organization, placed in optional panes rather than an always-open assistant. Neither reference supplies branding, claims or imagery for this product.
+**OWN-WORLD:** Dark Graphite default, Light/System selectable in View, subdued jade active states, flat tonal panes and native SF functional text. The Open Frame mark is two filled opposing 90° corners; the custom lowercase wordmark has square i dot, chamfered s, squared t and straight double l. Preserve vector geometry rather than substitute a font or rounded logo.
 
-**FIRST VIEWPORT:** Navigation and inspector begin hidden. One horizontal search row contains Describe a photo…, Filters and View. One small result/indexing status row precedes a broad image-only masonry gallery. No permanent example, syntax instructions, live-view explanation, cards or caption row. Existing saved grouping affects order only; photos share one continuous masonry layout with no headings or section gaps.
+**FIRST VIEWPORT:** One 52pt top header integrates into the native titlebar, with an 80pt traffic-light reserve plus 16pt normal inset. Native window controls remain; source-backed background dragging is unverified. It holds identity, All photos/Favorites/People and compact tools. At ≥1180pt search/Filters/zoom/View share this header; below it search forms a second row. No permanent rail. Folders, saved views and collections are behind the folder toggle; contextual details open from selection. A compact results/indexing row leads the continuous image-only masonry archive.
 
-**SIGNATURE:** Describe → inspect images → refine only as needed. Filters expands a bounded scrollable drawer. Each active exact constraint is individually removable; the palette constraint states its color and minimum area. Valid supported mixed queries apply on Return; ambiguous/unsupported clauses block execution for correction. Plain visual descriptions retain debounced retrieval. View contains filename/keyword mode, grouping, sorting, saving and pairing controls. Saved definitions update explicitly.
+**SIGNATURE:** Find a moment → inspect images → refine as needed. Search has an inset 6pt radius field and visible focus outline. Active destination has a 2pt jade underline. Folders/Saved Views/Collections headings use explicit appearance-aware secondary colors. View has an explicit primary label/chevron in a borderless native Menu; source padding is 8×4pt with 5pt radius/6% primary background, while native rendering supplies final treatment. Filters opens a bounded scrollable drawer; exact constraints stay individually removable. View owns search mode, appearance, grouping/sorting, saving and pairing. Saved definitions update explicitly.
 
-**MOTION:** No entrance animation or whole-gallery animation. Stable result identity and scroll anchor preserve context during regrouping. Optional panes and filters remain understandable with immediate transitions and reduced motion.
+**MOTION:** No entrance animation or archive-wide animation. Preserve stable photo identity and scroll context when regrouping, zooming or indexing. Native controls own interaction feedback.
+
+**CONTINUITY:** Display Still and output `.build/app/Still.app`; keep `com.domogo.photoviews` and existing Photo Views catalog/cache paths. Counts must distinguish logical photos from files indexed; RAW+JPEG collapse affects photo counts, not per-file coverage.
 
 ## Gallery and supporting panes
 
@@ -43,9 +45,17 @@ Keep result and indexing counts on one small row. Expand indexing controls/failu
 
 ## Verification
 
+Latest release builds passed. Earlier CatalogChecks passed 20,000-item geometry at three widths, finite-query and persistence checks; inference behavior did not change. Fresh native wide captures cover Graphite gallery/folders, Light, blocked query, palette and corrected View menus in both appearances. `still-final-native-zoom.png` is a native wide capture, not compact evidence. Native accessibility actions verified ⌘2 Favorites, ⌘1 All photos and ⌘F search focus; “cars location:Paris” blocks with Search not run, while “mostly blue” applies the 25% palette filter and expands its drawer. The existing 19,877 catalog files and two saved views remain present.
+
+Reviewer disposition is **ship for the scored View contrast fix only**: the label/chevron are readable in corrected wide Light/Graphite captures, with no regression at that fix scope. Earlier titlebar and folder-heading fixes were also scored resolved. This is not full-surface acceptance. Compact/780pt capture was blocked by `CUA returned noWindowsAvailable` during edge resizing; full accessibility, high contrast, System appearance transitions and actual window dragging remain unverified. Image-generated concepts are design references, not native QA. The web build-phase remains a spec with unsuitable font/raster gates; it has not passed for this native application.
+
+Captures: `.impeccable/review/still-final-wide.png`, `still-final-folders.png`, `still-final-native-zoom.png`, `still-final-light.png`, `still-final-blocked-light.png`, `still-final-palette-light.png`, `still-menu-fixed-light.png` and `still-menu-fixed-dark.png`.
+
+### Historical verification contract
+
 Review actual native wide and compact windows in both appearances, default gallery, expanded filters, active palette, selection/paired inspector and blocked query states. Local checks must cover schema migration, old/new recipe decoding, palette persistence and invalidation, missing previews, offline originals, exact constraints and collapsed-pair selection. No web detector or proxy capture applies to SwiftUI/AppKit. Full accessibility and measured retrieval/performance remain separately scoped evidence.
 
-Native evidence 2026-10-02: wide/light and compact/dark captures in `.impeccable/review/canvas-*.png`; palette, filters, blocked query and paired inspector covered. Repeated deep scroll reaches the end of 3,416 logical photos and native AX remains responsive. Main-thread SwiftUI lazy-layout freeze replaced with deterministic geometry and off-main thumbnail decoding (512px, four workers, 64MiB/256-image cache). 20,000-photo geometry invariants pass at three widths; this is not a frame-rate benchmark. Space preview, spatial Down selection and JPEG/NEF member switching checked.
+Historical native evidence 2026-10-02 (previous canvas, not the Still redesign): wide/light and compact/dark captures in `.impeccable/review/canvas-*.png`; palette, filters, blocked query and paired inspector covered. Repeated deep scroll reaches the end of 3,416 logical photos and native AX remains responsive. Main-thread SwiftUI lazy-layout freeze replaced with deterministic geometry and off-main thumbnail decoding (512px, four workers, 64MiB/256-image cache). 20,000-photo geometry invariants pass at three widths; this is not a frame-rate benchmark. Space preview, spatial Down selection and JPEG/NEF member switching checked.
 
 ## People extension — 2026-10-03
 
@@ -55,6 +65,6 @@ The avatar browser replaces the search/status rows with its own compact People h
 
 Reported local verification: release build and 22 Python checks passed, including merge redirects and exclusion persistence across changed detection order, reindexing and restore. A real recognition probe checked 64 previews, producing 25 groups with zero scan failures; one avatar and two source photos were checked as the same person. This is bounded evidence, not broad recognition-quality acceptance. Small, profile or occluded faces may be missed; identities may split or be confused.
 
-After the Mac unlocked, native final-release checks verified People entry automatically starts scanning, Pause, avatar selection opening 11 photos, Not This Person changing 11 to 10, Restore returning 10 to 11, and merge chooser/cancel. Captures in `.impeccable/review/` cover `people-browser-wide.png`, `people-browser-compact.png` (natively resized), `people-person-wide.png` and `people-merge.png`; the avatar circle-fill correction was checked. Fresh visual review is pending; no review ship verdict is claimed. Native QA remains incomplete for dark appearance, high contrast, full keyboard/accessibility behavior and empty/failure/finished-scan states. Resume/retry, gallery return and executing a merge also require native verification. Broad recognition accuracy remains unverified. Earlier canvas approval does not sign off this extension. Keep the incumbent design tokens and sidecar unchanged; build and check locally with no CI or paid services.
+After the Mac unlocked, native final-release checks verified People entry automatically starts scanning, Pause, avatar selection opening 11 photos, Not This Person changing 11 to 10, Restore returning 10 to 11, and merge chooser/cancel. Captures in `.impeccable/review/` cover `people-browser-wide.png`, `people-browser-compact.png` (natively resized), `people-person-wide.png` and `people-merge.png`; the avatar circle-fill correction was checked. Fresh visual review is pending; no review ship verdict is claimed. Native QA remains incomplete for dark appearance, high contrast, full keyboard/accessibility behavior and empty/failure/finished-scan states. Resume/retry, gallery return and executing a merge also require native verification. Broad recognition accuracy remains unverified. Earlier canvas approval does not sign off this extension. Build and check locally with no CI or paid services. The approved Still identity supersedes the former palette/navigation guidance; this extension does not receive new QA by inheritance.
 
 People refinement: existing neutral avatar layout now offers Refine Groups beside Scan New Photos when idle. It consolidates strongly supported groups; future matching uses group face averages instead of one initial representative. Co-occurring faces/exclusions block automatic consolidation, RAW/JPEG pairs supply one unit of evidence, and complete-link checks prevent merge chains. The confirmed screenshot pair received an explicit correction. Native refinement action verified; broader identity accuracy is unmeasured. This supersedes the initial single-representative matching description.

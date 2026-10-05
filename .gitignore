@@ -28,3 +28,6 @@ results/
 *.log
 *.pem
 *.key
+
+# Local visual decision and measurement artifacts
+.impeccable/build/

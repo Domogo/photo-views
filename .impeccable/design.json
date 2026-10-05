@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-02T18:20:00.112111+00:00",
-  "title": "Design System: Photo Views",
+  "generatedAt": "2026-10-05T09:51:13.807064+00:00",
+  "title": "Design System: Still",
   "extensions": {
     "nativePlatform": {
       "frameworks": [
@@ -15,17 +15,17 @@
         "Sources/PhotoViewsApp/WorkspaceModel.swift",
         "Sources/PhotoViewsApp/PhotoViewsApp.swift",
         "Sources/PhotoViewsApp/NativePhotoGallery.swift",
-        "Sources/PhotoViewsCore/GalleryGeometry.swift"
+        "Sources/PhotoViewsCore/GalleryGeometry.swift",
+        "Sources/PhotoViewsApp/Brand.swift",
+        "scripts/build_brand.swift"
       ],
       "colorSemantics": {
-        "canvas": "NSColor.textBackgroundColor",
-        "inspector": "NSColor.controlBackgroundColor",
-        "primaryText": "system default primary text",
-        "secondaryText": "foregroundStyle(.secondary)",
-        "selection": "2pt NSColor.controlAccentColor outline; native List selection",
-        "primaryAction": "native borderedProminent button",
-        "separator": "native Divider",
-        "focus": "AppKit NSCollectionView focus behavior"
+        "canvas": "StillBrand.canvas, appearance-aware source sRGB",
+        "pane": "StillBrand.pane, appearance-aware source sRGB",
+        "accent": "StillBrand.accent, appearance-aware jade",
+        "text": "native primary/secondary",
+        "selection": "2pt jade outline; native keyboard focus",
+        "folderHeadings": "StillBrand.secondary; #B7BDB8 dark / #5A605B light"
       },
       "typographySemantics": {
         "emptyStateTitle": "title2 semibold",
@@ -34,9 +34,11 @@
         "recipeHeading": "subheadline semibold",
         "sourceHeading": "body medium",
         "supportingText": "caption",
-        "emptyStateSymbol": "system size 36pt, light"
+        "emptyStateSymbol": "system size 36pt, light",
+        "navigation": "13pt regular, active semibold",
+        "identity": "Custom vector StillWordmark; not a font"
       },
-      "geometry": "Native controls own radii and focus/hover treatment; no custom radius tokens."
+      "geometry": "Filled opposing-corner mark and custom sharp vector wordmark; search radius 6pt; native controls own other radii."
     },
     "nativeLayout": {
       "units": "pt",
@@ -53,14 +55,14 @@
       "sidebar": {
         "minimum": 180,
         "ideal": 220,
-        "maximum": 300
+        "maximum": 260
       },
       "inspector": {
         "minimum": 220,
         "ideal": 260,
         "maximum": 340
       },
-      "adaptation": "Native HSplitView; sidebar initially hidden with persisted visibility, inspector initially hidden and opened by photo selection; toolbar toggles supporting panes.",
+      "adaptation": "52pt Atelier top navigation; unified nav/search at >=1180pt photo browsing, split search row below; optional folders and contextual inspector",
       "saveSheetWidth": 400,
       "emptyExplanationMaxWidth": 380,
       "gallery": {
@@ -78,43 +80,48 @@
       "filters": {
         "height": "max(120, min(280, availableHeight - 250)) pt",
         "scrollable": true
+      },
+      "titlebar": {
+        "integration": "StillWindowChrome; top container safe-area ignored",
+        "leadingTrafficLightReservePt": 80,
+        "normalHorizontalInsetPt": 16,
+        "nativeControls": true,
+        "backgroundDragging": "source-backed, not natively verified"
       }
     },
     "verification": {
-      "revision": "Quiet photo canvas and overall palette",
-      "disposition": "ship at two-fix-list scope",
-      "reviewer": "Both material fixes resolved: blocked-query false no-match status and stale documentation. No remaining findings at that follow-up scope; not whole-surface, general performance or accessibility signoff.",
-      "sourceCompilation": "passed",
-      "localChecks": "Existing checks passed; CatalogChecks geometry covered 20,000 items at three widths in approximately 7ms for that check.",
-      "renderedReview": "Native wide/light and compact/dark QA complete; corrected blocked-query state confirmed. Final normal build reopened and natively verified.",
+      "revision": "Still Graphite / Atelier / selected Open Frame",
+      "disposition": "ship for the scored View contrast fix only; not full-surface acceptance",
+      "sourceCompilation": "Latest release builds passed",
+      "renderedReview": "Fresh wide native Light/Graphite captures reviewed; titlebar and heading fixes resolved; final View label/chevron contrast fixed with no regression at scored scope",
+      "historicalEvidence": "2026-10-02 canvas review and 2026-10-03 People probes apply to previous surfaces only; no inherited ship verdict",
+      "followUpVerification": [
+        "Compact/780pt layout: capture blocked by CUA returned noWindowsAvailable during edge resizing",
+        "Full accessibility and high contrast",
+        "System appearance transitions",
+        "Actual window dragging"
+      ],
+      "localChecks": "CatalogChecks passed: 20,000-item geometry at three widths, persisted views/sources and finite-query checks",
       "captures": [
-        ".impeccable/review/canvas-wide-gallery.png",
-        ".impeccable/review/canvas-wide-filters.png",
-        ".impeccable/review/canvas-wide-palette.png",
-        ".impeccable/review/canvas-wide-blocked-query.png",
-        ".impeccable/review/canvas-wide-pair.png",
-        ".impeccable/review/canvas-compact-dark-gallery.png",
-        ".impeccable/review/canvas-compact-dark-filters.png"
+        ".impeccable/review/still-final-wide.png",
+        ".impeccable/review/still-final-folders.png",
+        ".impeccable/review/still-final-native-zoom.png",
+        ".impeccable/review/still-final-light.png",
+        ".impeccable/review/still-final-blocked-light.png",
+        ".impeccable/review/still-final-palette-light.png",
+        ".impeccable/review/still-menu-fixed-light.png",
+        ".impeccable/review/still-menu-fixed-dark.png"
       ],
       "verifiedInteraction": [
-        "Deep scroll of 3,416 logical gallery items reached bottom and remained responsive",
-        "Down changes selection; Space opens preview",
-        "JPEG/NEF pair-member switching",
-        "mostly green format:ARW applies exact chips on Return",
-        "Invalid location clause blocks execution"
+        "\u23182 Favorites; \u23181 All photos; \u2318F search focus",
+        "cars location:Paris blocks with Search not run",
+        "mostly blue applies 25% palette condition and expands drawer"
       ],
-      "boundedObservation": "Idle CPU 0%, RSS approximately 258MiB in the observed session; not FPS, frame-rate benchmark or broad performance guarantee.",
-      "followUpVerification": [
-        "Full accessibility including keyboard traversal, increased contrast and reduced motion",
-        "Broad palette/retrieval quality and measured frame-rate/performance"
-      ],
-      "nativeOnly": "Web detector unsupported; no HTML/iOS proxy evidence.",
       "catalogContinuity": {
-        "schemaVersion": 5,
         "files": 19877,
-        "savedViews": 2,
-        "palettes": 5085
-      }
+        "savedViews": 2
+      },
+      "evidenceLimits": "native-zoom capture is wide; imagegen concepts are not native QA; web build-phase remains spec and unsuitable font/raster gates have not passed"
     },
     "paletteSearch": {
       "version": "srgb-hsv-area-v1",
@@ -152,13 +159,56 @@
       "step": 0.01,
       "paginationBatch": 500,
       "calibratedProbability": false
+    },
+    "appearance": {
+      "default": "dark",
+      "choices": [
+        "dark",
+        "light",
+        "system"
+      ],
+      "storageKey": "stillAppearance",
+      "source": "StillBrand appearance providers; token primitives in DESIGN.md"
+    },
+    "breakpoints": [
+      {
+        "name": "unified-native-header",
+        "value": "1180pt",
+        "condition": "photo browsing; People retains own controls"
+      }
+    ],
+    "identity": {
+      "mark": "Two filled opposing right-angle corners; selected logo overrides concept outlined mark",
+      "wordmark": "Custom sharp vector lowercase: square i dot, chamfered s, squared t, straight paired l",
+      "signature": {
+        "markSizePt": 22,
+        "wordmarkSizePt": [
+          48,
+          20
+        ],
+        "gapPt": 9
+      },
+      "continuity": "Still.app; bundle/data/cache identities retained"
+    },
+    "nativeMenu": {
+      "implementation": "Borderless native Menu, hidden default indicator; explicit primary label and 8pt semibold chevron",
+      "sourceTreatment": "6pt label gap; 8x4pt padding; 5pt radius; 6% primary background",
+      "rendering": "Native Menu supplies final treatment"
     }
   },
   "components": [],
   "nativeComponents": [
     {
-      "name": "Search and View",
-      "implementation": "Plain native search field; Filters button; View menu holds search mode, grouping/sorting, saved-view and pairing actions"
+      "name": "Atelier header",
+      "implementation": "52pt native header; All photos/Favorites/People; 13pt tabs, 2pt jade active underline and selected accessibility trait"
+    },
+    {
+      "name": "Open Frame signature",
+      "implementation": "Filled exact vector polygons and custom wordmark; one accessible Still label"
+    },
+    {
+      "name": "Inset search",
+      "implementation": "Find a moment; 6pt radius; 1pt 12%-primary idle/jade focus outline; native TextField"
     },
     {
       "name": "Removable constraints",
@@ -186,47 +236,33 @@
     }
   ],
   "narrative": {
-    "northStar": "Photo Workbench",
-    "overview": "Minimal, bespoke, intuitive native macOS Photo Workbench, refreshed as a quiet photo canvas. One search row leads a full-proportion recycled AppKit masonry gallery; native filters and supporting panes appear when useful. Source/local checks and native wide/light compact/dark QA passed. Reviewer disposition is ship at the two-fix-list scope after confirming corrected blocked-query state and documentation. This does not imply whole-surface, general performance or accessibility signoff.",
+    "northStar": "Atelier in Graphite",
+    "overview": "Quiet, photographic, understated, minimal, modern and bespoke native Still. Graphite default, Atelier top navigation, selected filled-corner identity and sharp vector wordmark. Wide native review resolves titlebar/headings and returns ship for the scored View contrast fix only; compact and broader accessibility remain unverified.",
     "keyCharacteristics": [
-      "Photograph-led neutral surroundings and full proportions",
-      "Familiar native interaction with optional panes",
-      "Single search row and on-demand refinement",
-      "Readable constraints, availability, coverage and provenance"
+      "Photographs lead at full proportions",
+      "Native functional text and keyboard/menu behavior",
+      "Top navigation with optional folders, filters and details",
+      "Explicit constraints, coverage, availability and photo/file semantics"
     ],
     "rules": [
       {
         "name": "The Photograph Rule",
-        "body": "Keep decorative color out of the image canvas; actual photographs carry the palette.",
-        "section": "colors"
-      },
-      {
-        "name": "The State Rule",
-        "body": "Color supplements meaningful state and is never its sole explanation.",
+        "body": "Decorative color stays out of the archive canvas.",
         "section": "colors"
       },
       {
         "name": "The Label Rule",
-        "body": "Core actions have readable labels; icons support meaning.",
+        "body": "Actions remain understandable through text, tooltips, menus and accessible names.",
         "section": "typography"
-      },
-      {
-        "name": "The Stable Place Rule",
-        "body": "Keep primary controls consistent and preserve meaningful selection through organization changes where possible.",
-        "section": "layout"
       }
     ],
     "dos": [
-      "Do preserve full photograph proportions and neutral surroundings.",
-      "Do use native macOS controls and system appearance.",
-      "Do expose individual constraints and incomplete coverage.",
-      "Do distinguish focus, selection, availability and provenance."
+      "Do use exact source colors and selected vector identity.",
+      "Do review native dark/light and compact/wide states."
     ],
     "donts": [
-      "Don't add gallery captions, card framing or decorative overlays.",
-      "Don't equate palette families with object detection.",
-      "Don't invent fixed native color, radius or SF metrics.",
-      "Don't claim revised visual or accessibility signoff from compilation or old captures."
+      "Don't restore a permanent navigation rail.",
+      "Don't treat old canvas captures as redesign approval."
     ]
   }
 }

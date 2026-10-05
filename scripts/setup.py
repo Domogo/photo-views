@@ -43,7 +43,7 @@ def main():
         return 1
     print('Ready. For a custom root, launch the app executable with:')
     print('PHOTO_VIEWS_PYTHON=' + shlex.quote(str(python)) + ' PHOTO_VIEWS_MODEL=' + shlex.quote(str(model)) +
-          ' ' + shlex.quote(str(repo / '.build/app/Photo Views.app/Contents/MacOS/PhotoViews')))
+          ' ' + shlex.quote(str(repo / '.build/app/Still.app/Contents/MacOS/PhotoViews')))
     return 0
 
 if __name__ == '__main__':
