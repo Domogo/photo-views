@@ -11,11 +11,13 @@ The public-facing README identifies the app as a local research/hackathon develo
 - The existing runtime also passed offline setup verification.
 - Three native public captures were visually inspected. A disposable 24-image generated-artwork catalog showed 24 indexed items; dominant-blue ≥25% returned 12. No private archive photos or faces appear in public images.
 
-A fresh-clone build/check and inference smoke result is recorded here after completion. Broader held-out retrieval/tag/identity accuracy, full accessibility, older macOS validation, notarization and self-contained packaging remain open. Publication is source availability, not a production-quality claim.
+A fresh local clone of preparation commit `a4c184a` passed CatalogChecks, IndexChecks and the release developer-app build. Its setup verification, 25 worker tests and four setup regression tests passed with the freshly installed runtime. A disposable synthetic catalog encoded all 24 images in two batches without failures; a zero-cutoff visual query returned all 24 eligible items, and both face models loaded. This verifies execution, not semantic accuracy. Broader held-out retrieval/tag/identity accuracy, full accessibility, older macOS validation, notarization and self-contained packaging remain open. Publication is source availability, not a production-quality claim.
 
 ## History and data review
 
 An all-reachable-object scan examined 242 historical text blobs for private keys, common GitHub/AWS/API token patterns, credential assignments and private filesystem paths. No credential pattern matched. The only private-path pattern findings were synthetic `/Volumes/Old Mount/Photos` test literals. Historical object filenames contained no photo/model/database/environment-key artifacts; the largest historical blob was approximately 47 KB.
+
+Gitleaks 8.30.1 was downloaded from its official GitHub release and verified against the release SHA-256 manifest. Default rules flagged one SQLite UPSERT column-assignment literal (`excluded.last_access,byte_size=excluded.byte_size`) as a generic API key. Source review confirmed it is SQL, not a credential. `.gitleaks.toml` retains all default rules and allowlists only that exact matched SQL string. Subsequent all-history (29 commits) and committed-file snapshot scans passed with no findings. Reports/tool binaries remain outside Git.
 
 This is bounded audit evidence, not a guarantee that no sensitive value exists. Private images, weights, catalogs, face crops/descriptors, caches, generated reports and credentials remain excluded. Only native captures of original generated artwork were added to version control. The public SUMMARY now uses tracked public-safe images rather than broken links to private review captures.
 

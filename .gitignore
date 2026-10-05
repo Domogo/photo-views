@@ -19,3 +19,12 @@ catalogs/
 results/
 *.sqlite
 *.sqlite-*
+
+# Local inference assets, diagnostics and private key material
+*.onnx
+*.safetensors
+*.pt
+*.pth
+*.log
+*.pem
+*.key

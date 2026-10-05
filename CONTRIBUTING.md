@@ -19,3 +19,5 @@ Use the configured Python path if your setup root differs. Checks must use dispo
 Do not commit private photos, face crops/vectors, GPS, model weights, catalogs, caches, logs, credentials or generated probe reports. Public screenshots must use original generated artwork or cleared images. Use synthetic reproductions in issues instead of attaching a personal catalog.
 
 Checks and builds run locally. Do not add GitHub Actions, hosted builds, paid services or automation. Preserve originals and keep baseline inference local. Changes to model versions must update checksums, provenance, notices and evaluation evidence together.
+
+Optional local secret audit with [Gitleaks](https://github.com/gitleaks/gitleaks): `gitleaks git . --log-opts=--all --redact`. The repository configuration preserves default rules with one narrowly reviewed SQLite false-positive exception. Keep generated audit reports outside the checkout.

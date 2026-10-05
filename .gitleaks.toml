@@ -1,0 +1,11 @@
+# Preserve the default detectors; allow only the reviewed SQLite UPSERT literal.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "SQLite excluded column assignments, not a credential"
+regexTarget = "match"
+regexes = ['''excluded\.last_access,byte_size=excluded\.byte_size''']
